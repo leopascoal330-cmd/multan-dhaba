@@ -261,11 +261,18 @@ const S={money:45,debt:0,day:1,stock:{chicken:6,rice:4,sauce:3,tikka:3,rice:3,fl
 const newDS=()=>({rev:0,tips:0,served:0,walked:0,spent:0});
 S.pass=Array(10).fill(null);S.wall={ext:1,broom:1};S.spills=[];S.power=1;S.powerT=0;S.ev=null;S.evSeq=0;let chaosT=40,spillId=0;
 const isFood=k=>!!(COOK[k]||k==='cola');
+const DISHES={bc:{day:1,cost:0},naan:{day:1,cost:0},cola:{day:1,cost:0},roti:{day:2,cost:25},chai:{day:2,cost:30},sam:{day:3,cost:40},ayran:{day:3,cost:35},bir:{day:4,cost:60},tm:{day:5,cost:80}};
+const DISH_KEYS=Object.keys(DISHES);
+S.menu=['bc','naan','cola'];
+const onMenu=k=>S.menu.includes(k);
+const ING_FOR={chicken:['bc','tm','bir'],sauce:['bc'],tikka:['tm'],rice:['bir'],flour:['roti'],naan:['naan'],samosa:['sam'],chai:['chai'],cola:['cola'],ayran:['ayran']};
+const ingOpen=k=>(ING_FOR[k]||[]).some(onMenu);
+const unlockable=()=>DISH_KEYS.filter(k=>!onMenu(k)&&DISHES[k].day<=S.day);
 S.ds=newDS();
-const SAVEKEY='nehan-dhaba-v4';
+const SAVEKEY='multan-dhaba-v5';
 const ORDERABLE=['chicken','rice'];
-function save(){try{localStorage.setItem(SAVEKEY,JSON.stringify({money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}}
-function load(){try{const d=JSON.parse(localStorage.getItem(SAVEKEY)||'null');if(d&&d.day){S.money=d.money;S.debt=d.debt||0;S.day=d.day;S.ratings=d.ratings||[];Object.assign(S.stock,d.stock);Object.assign(S.fridge,d.fridge||{});return true}}catch(e){}return false}
+function save(){try{localStorage.setItem(SAVEKEY,JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}}
+function load(){try{const d=JSON.parse(localStorage.getItem(SAVEKEY)||'null');if(d&&d.day){if(Array.isArray(d.menu))S.menu=d.menu.filter(k=>DISHES[k]);S.money=d.money;S.debt=d.debt||0;S.day=d.day;S.ratings=d.ratings||[];Object.assign(S.stock,d.stock);Object.assign(S.fridge,d.fridge||{});return true}}catch(e){}return false}
 
 /* =============== NET STATE =============== */
 const NET={role:'solo',nroom:null,code:'',name:'',seq:0,outbox:[],players:{},myPeer:null,lastG:null,lastMs:-1,avatars:{},ccust:new Map(),sendT:0,hostSeen:0,summary:null,ppj:'',hj:''};
@@ -522,8 +529,9 @@ const jaali=plane(jMat,9.4,0.7,-5.3,2.55,0);
 // signs
 const nameTex=textTex([{t:'MULTAN DHABA',b:1,size:30,c:'#e3b04a'},{t:'Desi khana · chai · tandoor',size:15,c:'#f0dcc0'}],256,80,'#5a1a1c','#fff',20,'#c9a24a');
 plane(texMat(nameTex,true),4.0,1.25,6,1.85,0.15);
-const menuTex=textTex([{t:'MENU',b:1,size:18,c:'#e3b04a'},'Butter Chicken  $12','Tikka Masala    $13','Chicken Biryani $11','Samosa  $4  ·  Naan  $3','Roti  $2  ·  Chai  $3','Ayran  $3  ·  Cola  $2'],200,176,'#241812','#efe2cc',13,'#c9a24a');
-plane(texMat(menuTex,true),1.6,1.4,-9.84,1.85,3.75,Math.PI/2);
+let menuTex=textTex([{t:'MENU',b:1,size:18,c:'#e3b04a'},'Butter Chicken  $12','Tikka Masala    $13','Chicken Biryani $11','Samosa  $4  ·  Naan  $3','Roti  $2  ·  Chai  $3','Ayran  $3  ·  Cola  $2'],200,176,'#241812','#efe2cc',13,'#c9a24a');
+const menuSignMat=texMat(menuTex,true);plane(menuSignMat,1.6,1.4,-9.84,1.85,3.75,Math.PI/2);
+function refreshMenuSign(){const L=[{t:'MENU',b:1,size:18,c:'#e3b04a'}];['bc','tm','bir','sam','naan','roti','chai','ayran','cola'].forEach(k=>{const on=onMenu(k);L.push({t:on?`${ITEMS[k].name}  $${ITEMS[k].price}`:`${ITEMS[k].name} — soon`,size:on?13:11,c:on?'#efe2cc':'#7a6a5a'})});menuSignMat.map=textTex(L,200,240,'#241812','#efe2cc',12,'#c9a24a');menuSignMat.needsUpdate=true}
 // hanging brass lanterns
 const LANTERNS=[];
 [[-6.5,4],[-2.6,4],[3.1,4],[7.0,4],[0,6.6],[0,1.6]].forEach(([x,z],i)=>{box(0.02,0.5,0.02,'#3a2a1a',x,2.4,z);const top=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.12,6),M('#b8893a'));top.position.set(x,2.36,z);scene.add(top);
@@ -727,12 +735,13 @@ const SHELF={};
     box(BW-0.1,0.6,D-0.08,new THREE.MeshBasicMaterial({visible:false}),cx,cy,Z,g);
     const vis=[];for(let n=0;n<6;n++){const m=itemMesh(INGS[k].item);m.scale.setScalar(sc);m.position.set(cx-0.4+(n%3)*0.4+rand(-0.03,0.03),cy,Z+(n<3?0.13:-0.13));m.rotation.y=rand(-0.25,0.25);g.add(m);vis.push(m)}
     const tag=plane(texMat(textTex([{t:INGS[k].name.toUpperCase(),size:10,b:1}],96,16,'#f2c81a','#111',10),true),0.44,0.075,cx,LV[lv]-0.045,Z+D/2-0.012,0);
-    SHELF[k]={vis};reg({type:'shelf',ref:'h'+k,ing:k,name:INGS[k].name},g)});
+    const lockTag=plane(texMat(textTex([{t:'LOCKED',size:11,b:1,c:'#fff'}],64,16,'#7a1f24','#fff',10),true),0.34,0.085,cx,LV[lv]+0.2,Z+0.05,0);lockTag.visible=false;
+    SHELF[k]={vis,lock:lockTag};reg({type:'shelf',ref:'h'+k,ing:k,name:INGS[k].name},g)});
   // overstock on the top level
   const boxTex=t=>texMat(textTex([{t,b:1,size:11,c:'#5a3a1a'},{t:'↑ THIS SIDE UP ↑',size:7,c:'#7a1f24'}],64,32,'#c49a62','#5a3a1a',10));
   ['MASALA KING','NAAN CO.','FRAGILE','LAHORE FOODS','PAPER CUPS','SPICES','BASMATI','FOIL TRAYS','NAPKINS','FRAGILE'].forEach((t,i)=>{const bay=i>>1,cx=X0+BW/2+bay*BW+((i&1)?0.3:-0.28),w=rand(0.42,0.55),h=rand(0.32,0.5);
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.46),[SM('#b8925a'),SM('#b8925a'),SM('#c8a26a'),SM('#a8824a'),boxTex(t),SM('#b8925a')]);m.position.set(cx,LV[2]+h/2,Z+0.02);m.rotation.y=rand(-0.15,0.15);scene.add(m)})})();
-function refreshShelves(){ING_KEYS.forEach(k=>{const n=INGS[k].free?6:S.stock[k]>0?Math.min(6,Math.ceil(S.stock[k]/2)):0;SHELF[k].vis.forEach((m,i)=>m.visible=i<n)})}
+function refreshShelves(){ING_KEYS.forEach(k=>{const open=ingOpen(k);const n=!open?0:INGS[k].free?6:S.stock[k]>0?Math.min(6,Math.ceil(S.stock[k]/2)):0;SHELF[k].vis.forEach((m,i)=>m.visible=i<n);if(SHELF[k].lock)SHELF[k].lock.visible=!open})}
 // garage shutter
 const shutter=box(0.1,2.45,3.4,texMat(rep(tSlats,1,10)),10.02,0,-4.7);box(0.4,0.4,3.6,'#6d7478',10.25,2.45,-4.7);
 plane(texMat(textTex([{t:'DELIVERIES',b:1,size:14,c:'#e3b04a'}],96,24,'#241812','#fff',14),true),1.1,0.27,9.88,2.65,-4.7,-Math.PI/2);
@@ -861,7 +870,9 @@ const SKINS=['#8d5a3c','#a86f47','#c48b60','#6e4630','#d6a27a','#b9825a'],HAIRS=
 const SHIRTS=['#8a2a2a','#2e5d8a','#b8902c','#4f7a43','#6a3f80','#e9e2d2','#3a3a44','#a8466a','#2d6f6a','#a85a2a'],PANTS=['#2b2b33','#3d4f6e','#5a4636','#1f1f22','#e9e2d2'];
 const NAMES_M=['Ali','Bilal','Hamza','Usman','Omar','Ahmed','Faisal','Kamran','Tom','Jonas','Saad','Zain'],NAMES_F=['Sana','Ayesha','Zara','Fatima','Hira','Mariam','Noor','Iqra','Lena','Maya','Amna'];
 const customers=[];
-function makeOrder(){const o=[];if(Math.random()<0.78)o.push(pick(['bc','bc','tm','tm','bir']));if(Math.random()<0.5)o.push(Math.random()<0.55?'naan':'roti');if(o.length<3&&Math.random()<0.25)o.push('sam');if(o.length<3&&Math.random()<0.6)o.push(pick(['chai','cola','ayran']));if(!o.length)o.push(pick(['sam','chai','naan']));return o.slice(0,3)}
+function makeOrder(){const o=[],m=a=>a.filter(onMenu);const mains=m(['bc','tm','bir']),sides=m(['naan','roti']),drinks=m(['chai','cola','ayran']);
+  if(mains.length&&Math.random()<0.8)o.push(pick(mains));if(sides.length&&Math.random()<0.55)o.push(pick(sides));if(o.length<3&&onMenu('sam')&&Math.random()<0.25)o.push('sam');if(o.length<3&&drinks.length&&Math.random()<0.6)o.push(pick(drinks));
+  if(!o.length)o.push(pick(m(['bc','naan','cola','sam','chai','roti']).concat(['naan'])));return o.slice(0,3)}
 const activeGuests=()=>NET.role==='client'?[...NET.ccust.values()].filter(c=>!c.leaving).length:customers.filter(c=>!c.leaving).length;
 function rng(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function custLook(seed){const r=rng(seed),pk=a=>a[Math.floor(r()*a.length)];const fem=r()<0.45,skin=pk(SKINS),hair=r()<0.15?'#8a8680':pk(HAIRS);const style=fem?pk(['hijab','long','long']):pk(['short','short','short','cap']);
@@ -919,7 +930,7 @@ const tuk={g:new THREE.Group(),state:'idle',x:26,cargo:[],flights:[],t:0,wheels:
   const drv=makePerson(DO,paintHead(DO));drv.position.set(-0.3,0.05,0);drv.rotation.y=Math.PI/2;poseSit(drv);drv.userData.arms.forEach(a=>a.rotation.x=1.1);drv.userData.elbows.forEach(e=>e.rotation.x=0.4);drv.scale.setScalar(0.92);g.add(drv);tuk.drv=drv;
   tuk.cargoG=new THREE.Group();g.add(tuk.cargoG);
   g.position.set(26,0,-4.7)})();
-function orderDelivery(cart){const list=[];Object.keys(cart).forEach(k=>{for(let i=0;i<cart[k];i++)list.push(k)});
+function orderDelivery(cart,unlocks){tuk.unlocks=unlocks||[];const list=[];Object.keys(cart).forEach(k=>{for(let i=0;i<cart[k];i++)list.push(k)});
   tuk.cargo=list.map(k=>{const spot=CRATE_SPOTS.find(s=>!s.used);spot.used='reserved';return {k,spot}});
   while(tuk.cargoG.children.length)tuk.cargoG.remove(tuk.cargoG.children[0]);
   tuk.cargo.forEach((c,i)=>{const b=box(0.36,0.28,0.36,'#a87b4a',0.3+(i%3)*0.3-0.3,0.55+Math.floor(i/6)*0.3,((Math.floor(i/3))%2)*0.4-0.2,tuk.cargoG);c.mini=b});
@@ -929,7 +940,7 @@ function updateTuk(dt){if(tuk.state==='idle')return;const target=7.4;tuk.t+=dt;
   if(tuk.state==='arrive'){if(tuk.x<16)setDoor(Math.min(1,doorOpen+dt/1.3));const blocked=doorOpen<0.95&&tuk.x<11.6;const sp=blocked?0:Math.min(6.5,(tuk.x-target)*1.6+0.8);tuk.x=Math.max(target,tuk.x-sp*dt);spin(-sp*dt);
     if(tuk.x<=target+0.01){tuk.state='unload';tuk.t=0;tuk.next=0.6;tuk.phrase=Math.floor(Math.random()*VO.length);shout(tuk.phrase)}}
   else if(tuk.state==='unload'){tuk.next-=dt;if(tuk.next<=0&&tuk.cargo.length){const c=tuk.cargo.shift();c.mini.visible=false;c.spot.x=rand(3.0,6.3);c.spot.z=rand(-6.6,-1.0);launchCrate(placeCrate(c.k,c.spot,new THREE.Vector3(tuk.x,1.5,-4.3)),new THREE.Vector3(c.spot.x,0,c.spot.z));tuk.next=rand(0.14,0.3)}
-    if(!tuk.cargo.length&&!tuk.flights.length&&tuk.next<-0.5){tuk.state='leave';do{tuk.phrase2=Math.floor(Math.random()*VO.length)}while(tuk.phrase2===tuk.phrase&&VO.length>1);shout(tuk.phrase2);toast('Delivery dropped in the storeroom','good')}}
+    if(!tuk.cargo.length&&!tuk.flights.length&&tuk.next<-0.5){tuk.state='leave';if(tuk.unlocks&&tuk.unlocks.length){tuk.unlocks.forEach(k=>{if(!onMenu(k))S.menu.push(k)});chaosEvent('NEW ON THE MENU!',tuk.unlocks.map(k=>ITEMS[k].name).join(' + ')+' — guests can order it now','rush');tuk.unlocks=[];refreshShelves();refreshMenuSign();save()}do{tuk.phrase2=Math.floor(Math.random()*VO.length)}while(tuk.phrase2===tuk.phrase&&VO.length>1);shout(tuk.phrase2);toast('Delivery dropped in the storeroom','good')}}
   else if(tuk.state==='leave'){const sp=Math.min(5,(tuk.x-target)*1.2+1.2);tuk.x+=sp*dt;spin(sp*dt);if(tuk.x>13)setDoor(Math.max(0,doorOpen-dt/1.3));if(tuk.x>=28){tuk.state='close'}}
   else if(tuk.state==='close'){setDoor(Math.max(0,doorOpen-dt/1.3));if(doorOpen<=0){tuk.state='idle';tuk.g.visible=false;stopMusic()}}
   tuk.g.position.set(tuk.x,Math.abs(Math.sin(tuk.t*14))*0.02,-4.7);tuk.g.rotation.z=Math.sin(tuk.t*9)*0.012;
@@ -1040,8 +1051,8 @@ function refreshHands(){[fpItems,tpHold].forEach(h=>{while(h.children.length)h.r
 
 /* =============== COOKING =============== */
 const parts=[];const partGeo=new THREE.BoxGeometry(0.05,0.05,0.05);
-function puff(pos,col,op){if(parts.length>150)return;const m=new THREE.Mesh(partGeo,new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op||0.55}));m.position.copy(pos);m.position.x+=rand(-.06,.06);m.position.z+=rand(-.06,.06);scene.add(m);parts.push({m,t:0,life:rand(1,1.6)})}
-function updateParts(dt){for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.t+=dt;p.m.position.y+=dt*0.45;p.m.scale.setScalar(1+p.t*1.4);p.m.material.opacity*=0.985;if(p.t>p.life){scene.remove(p.m);p.m.material.dispose();parts.splice(i,1)}}}
+const partPool=[];function puff(pos,col,op){if(parts.length>150)return;let m=partPool.pop();if(m){m.material.color.set(col);m.material.opacity=op||0.55;m.scale.setScalar(1)}else m=new THREE.Mesh(partGeo,new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op||0.55,depthWrite:false}));m.position.copy(pos);m.position.x+=rand(-.06,.06);m.position.z+=rand(-.06,.06);scene.add(m);parts.push({m,t:0,life:rand(1,1.6)})}
+function updateParts(dt){for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.t+=dt;p.m.position.y+=dt*0.45;p.m.scale.setScalar(1+p.t*1.4);p.m.material.opacity*=0.985;if(p.t>p.life){scene.remove(p.m);partPool.push(p.m);parts.splice(i,1)}}}
 function vessel(st,k){const g=new THREE.Group();let top;
   if(st.kind==='stove'){lathe([[0,0],[0.08,0],[0.14,0.03],[0.18,0.1],[0.19,0.11]],10,'#2e2e32',0,0,0,g);top=cyl(0.165,0.165,0.01,10,COOK[k].raw,0,0.085,0,g);[-1,1].forEach(s=>{const h=new THREE.Mesh(new THREE.TorusGeometry(0.03,0.01,4,6),M('#2e2e32'));h.position.set(s*0.2,0.1,0);h.rotation.y=Math.PI/2;g.add(h)})}
   else if(st.kind==='tandoor'){top=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.012,9),M(COOK[k].raw));if(k==='naan')top.scale.set(0.85,1,1.4);top.position.y=0.01;g.add(top)}
@@ -1073,7 +1084,7 @@ function updateStations(dt){for(const st of stations)for(const s of st.slots){if
   else if(s.state==='cooking')h=`${st.kind==='pour'?'Pouring ':''}${ITEMS[s.recipe].name}<div class="bar" style="margin-top:3px"><b style="width:${Math.min(100,s.t/T*100)}%;background:var(--gold)"></b></div>`;
   else if(s.state==='done'){const left=BURN-s.doneT;cls+=left<4?' warn':' ready';h=`${ITEMS[s.recipe].name} ready<div style="font-size:11px">burns in ${Math.ceil(left)}s</div><div class="bar" style="margin-top:2px"><b style="width:${left/BURN*100}%;background:${left<4?'var(--bad)':'var(--good)'}"></b></div>`}
   else{cls+=' burnt';h=st.fire?'ON FIRE':'Burnt · E to bin'}
-  s.el.innerHTML=`<div class="${cls}">${h}</div>`}}
+  const html=`<div class="${cls}">${h}</div>`;if(html!==s.lastHtml){s.lastHtml=html;s.el.innerHTML=html}}}
 
 function animPour(s,p){const u=s.pot.userData,bt=u.bt,lq=s.pot.userData.top,ease=x=>x<0?0:x>1?1:x*x*(3-2*x);
   u.lid.forEach(l=>{l.visible=p<0.12;});
@@ -1189,6 +1200,7 @@ function updateFocus(){focus=null;const pr=$('prompt');if(uiOpen()||S.mode!=='pl
   else if(f.type==='extw')t=S.hands.some(h=>h.k==='ext')?'<kbd>E</kbd>Hang the extinguisher back up':!S.wall.ext?'Someone else has the extinguisher':(full?'Hands full':'<kbd>E</kbd>Grab the fire extinguisher');
   else if(f.type==='fuse')t=S.power===0?'<kbd>E</kbd>Flip the fuse — get the lights back!':'Fuse box';
   else if(f.type==='prep')t=rawCount()?`<kbd>E</kbd>Put down ${rawCount()} ingredient${rawCount()>1?'s':''}`:(S.prep.length?`<kbd>E</kbd>Prep counter (${S.prep.length})`:'Prep counter · empty');
+  else if(f.type==='shelf'&&!ingOpen(f.ing))t=`${f.name} · locked until you add ${ITEMS[ING_FOR[f.ing][0]].name} to the menu`;
   else if(f.type==='shelf')t=INGS[f.ing].free?(full?'Hands full':`<kbd>E</kbd>Take ${ITEMS[INGS[f.ing].item].name}`):S.stock[f.ing]<=0?`${f.name} · out of stock`:(full?'Hands full':`<kbd>E</kbd>Take ${ITEMS[INGS[f.ing].item].name} · ${S.stock[f.ing]} left`);
   else if(f.type==='crate')t=f.landed?`<kbd>E</kbd>Unpack ${INGS[f.ing].pack} × ${f.name}`:'';
   else if(f.type==='ground')t=full?'Hands full':`<kbd>E</kbd>Pick up ${f.name}${f.q?` ×${f.q}`:''}`;
@@ -1223,6 +1235,7 @@ function useMut(f){
   if(f.type==='trash'){if(!S.hands.length)return;toast(`Binned ${S.hands.length} thing${S.hands.length>1?'s':''}`,'');S.hands=[];refreshHands();sfx.drop();return}
   if(f.type==='prep'){const raw=S.hands.filter(h=>ITEMS[h.k].raw&&!ITEMS[h.k].pack);if(!raw.length)return;
     const room=PREP_CAP-S.prep.length;if(!room){toast('Prep counter is full','bad');return}const put=raw.slice(0,room);put.forEach(h=>{S.prep.push(h);S.hands.splice(S.hands.indexOf(h),1)});refreshHands();refreshPrep();toast(`Put down ${put.length} on the prep counter`,'');sfx.pick();return}
+  if(f.type==='shelf'&&!ingOpen(f.ing)){toast('Locked — buy the dish on the PC first','bad');return}
   if(f.type==='shelf'){const k=f.ing,g=INGS[k];if(!g.free&&S.stock[k]<=0){toast(`Out of ${g.name} — order more on the PC`,'bad');sfx.bad();return}
     if(g.item.startsWith('pk_')){const q=g.free?6:Math.min(6,S.stock[k]);if(hold(g.item,q)){if(!g.free)S.stock[k]-=q;toast(`Took ${q} for the fridge`,'')}}
     else if(hold(g.item)){if(!g.free)S.stock[k]--}
@@ -1240,26 +1253,29 @@ function showPanel(title,sub,opts,note){exitLock();$('pTitle').textContent=title
   const c=document.createElement('p');c.className='note';c.textContent=note||'Click or press a number. Esc or E closes.';b.appendChild(c);$('panel').hidden=false;
   const first=b.querySelector('.opt:not(:disabled)');if(first)first.focus({preventScroll:true})}
 function pickOpt(i){const o=panelOpts&&panelOpts[i];if(!o||o.disabled)return;closePanels(true);o.run()}
-function openStation(st,slot){showPanel(st.name,st.kind==='pour'?'pour a drink':'choose what to cook',st.recipes.map(k=>({label:ITEMS[k].name,desc:needsHTML(k),right:`${COOK[k].time}s · $${ITEMS[k].price}`,disabled:!haveFor(k),
+function openStation(st,slot){showPanel(st.name,st.kind==='pour'?'pour a drink':'choose what to cook',st.recipes.map(k=>({label:ITEMS[k].name+(onMenu(k)?'':' 🔒'),desc:onMenu(k)?needsHTML(k):`Not on the menu yet · unlocks on day ${DISHES[k].day}`,right:onMenu(k)?`${COOK[k].time}s · $${ITEMS[k].price}`:'locked',disabled:!onMenu(k)||!haveFor(k),
   run:()=>doAct({a:'ck',r:st.ref,si:st.slots.indexOf(slot),k})})),'Ingredients come from your hands or the prep counter. Get them from the storeroom shelves.')}
-function openFridge(){showPanel('Drinks fridge',`${S.hands.length}/${HANDS} in hands`,[['cola','cola','Cola bottle','Serve as is'],['ayran','b_ayran','Ayran bottle','Pour it into a glass at the glass counter']].map(([k,item,lab,d])=>({label:lab,desc:`${S.fridge[k]} in the fridge · ${d}`,right:k==='cola'?`$${ITEMS.cola.price}`:'',disabled:S.fridge[k]<=0||S.hands.length>=HANDS,
+function openFridge(){showPanel('Drinks fridge',`${S.hands.length}/${HANDS} in hands`,[['cola','cola','Cola bottle','Serve as is'],['ayran','b_ayran','Ayran bottle','Pour it into a glass at the glass counter']].map(([k,item,lab,d])=>({label:lab+(onMenu(k)?'':' 🔒'),desc:onMenu(k)?`${S.fridge[k]} in the fridge · ${d}`:`Unlocks on day ${DISHES[k].day}`,right:k==='cola'?`$${ITEMS.cola.price}`:'',disabled:!onMenu(k)||S.fridge[k]<=0||S.hands.length>=HANDS,
   run:()=>doAct({a:'fd',k})})),'Empty? Grab a crate from the storeroom shelf and bring it here.')}
 function openPrep(){const counts={};S.prep.forEach(h=>counts[h.k]=(counts[h.k]||0)+1);showPanel('Prep counter',`${S.prep.length}/${PREP_CAP}`,Object.keys(counts).map(k=>({label:ITEMS[k].name,desc:`${counts[k]} on the counter`,right:'take 1',disabled:S.hands.length>=HANDS,
   run:()=>doAct({a:'pt',k})})),'Stations use ingredients from here automatically.')}
 function closePanels(relock){$('panel').hidden=true;$('pc').hidden=true;panelOpts=null;if(relock&&S.mode==='play')lock()}
-let pcTab='shop';const cart={};
+let pcTab='shop';const cart={};const ucart=new Set();
 function cartCount(){return Object.values(cart).reduce((a,b)=>a+b,0)}
-function cartCost(){return Object.keys(cart).reduce((a,k)=>a+cart[k]*INGS[k].cost,0)}
+function cartCost(){return Object.keys(cart).reduce((a,k)=>a+cart[k]*INGS[k].cost,0)+[...ucart].reduce((a,k)=>a+DISHES[k].cost,0)}
 function openPC(){exitLock();$('pc').hidden=false;renderPC()}
 function renderPC(){['shop','bank','day'].forEach(t=>$('tab'+t[0].toUpperCase()+t.slice(1)).setAttribute('aria-selected',pcTab===t));const b=$('pcBody');
   if(pcTab==='shop'){const free=CRATE_SPOTS.filter(s=>!s.used).length,cc=cartCount(),cost=cartCost(),busy=tuk.state!=='idle';
     b.innerHTML=`<div class="stat" style="font-size:15px"><span>Cash</span><span style="color:var(--gold)">$${S.money}</span><span>Free floor space in storeroom</span><span>${free} crates</span></div>
     <div class="row h"><span></span><span>Ingredient</span><span>Shelf</span><span class="hide">Crate</span><span>Cart</span><span></span></div>`+
-    ORDERABLE.map(k=>{const g=INGS[k],n=cart[k]||0;return `<div class="row"><span class="sw" style="background:${g.col}"></span><span>${g.name}</span><span>${S.stock[k]}</span><span class="hide m">${g.pack} for $${g.cost}</span><span>${n||'—'}</span><span style="display:flex;gap:4px"><button class="buy" id="sub-${k}" ${n?'':'disabled'} aria-label="Remove one ${g.name}">−</button><button class="buy" id="add-${k}" ${cc>=free||S.money<cost+g.cost+DEL_FEE?'disabled':''} aria-label="Add one ${g.name}">+</button></span></div>`}).join('')+
-    `<div class="cart"><span class="t">${cc} crate${cc===1?'':'s'} · $${cost} + $${DEL_FEE} delivery = <b style="color:var(--gold)">$${cc?cost+DEL_FEE:0}</b></span><button class="btn" id="orderBtn" ${!cc||busy||S.money<cost+DEL_FEE?'disabled':''}>${busy?(tuk.state==='wait'?'Tuk tuk on the way':'Tuk tuk is out'):'Order delivery'}</button></div>
-    <p class="note">Only chicken and rice need ordering. Sauces, flour, bread, samosas, chai and drinks are always on the storeroom shelves. The tuk tuk comes in through the garage door here in the storeroom and drops the crates on the floor. Press E on a crate to put it on the shelves.</p><div class="btns"><button class="btn ghost" id="pcClose">Log off</button></div>`;
-    ORDERABLE.forEach(k=>{$('add-'+k).onclick=()=>{cart[k]=(cart[k]||0)+1;renderPC()};$('sub-'+k).onclick=()=>{cart[k]=Math.max(0,(cart[k]||0)-1);renderPC()}});
-    $('orderBtn').onclick=()=>{if(!cartCount()||S.money<cartCost()+DEL_FEE||tuk.state!=='idle')return;const copy={...cart};Object.keys(cart).forEach(k=>delete cart[k]);doAct({a:'ord',c:copy});if(NET.role==='client')toast('Order sent','');renderPC()}}
+    ORDERABLE.filter(ingOpen).map(k=>{const g=INGS[k],n=cart[k]||0;return `<div class="row"><span class="sw" style="background:${g.col}"></span><span>${g.name}</span><span>${S.stock[k]}</span><span class="hide m">${g.pack} for $${g.cost}</span><span>${n||'—'}</span><span style="display:flex;gap:4px"><button class="buy" id="sub-${k}" ${n?'':'disabled'} aria-label="Remove one ${g.name}">−</button><button class="buy" id="add-${k}" ${cc>=free||S.money<cost+g.cost+DEL_FEE?'disabled':''} aria-label="Add one ${g.name}">+</button></span></div>`}).join('')+
+    `<div class="row h" style="margin-top:6px"><span></span><span>New dishes</span><span>Price</span><span class="hide">Status</span><span></span><span></span></div>`+
+    DISH_KEYS.filter(k=>DISHES[k].cost).map(k=>{const d=DISHES[k],own=onMenu(k),ready=d.day<=S.day,inC=ucart.has(k);return `<div class="row" style="${own?'opacity:.55':''}"><span class="sw" style="background:${ITEMS[k].col}"></span><span>${ITEMS[k].name}</span><span>$${ITEMS[k].price}</span><span class="hide m">${own?'On the menu':ready?'$'+d.cost+' recipe kit':'Unlocks on day '+d.day}</span><span>${inC?'✓':''}</span><span>${own?'':ready?`<button class="buy" id="un-${k}" ${!inC&&S.money<cost+d.cost+DEL_FEE?'disabled':''}>${inC?'Remove':'Buy $'+d.cost}</button>`:'<span class="m">🔒 day '+d.day+'</span>'}</span></div>`}).join('')+
+    `<div class="cart"><span class="t">${cc} crate${cc===1?'':'s'}${ucart.size?` + ${ucart.size} new dish${ucart.size>1?'es':''}`:''} · $${cost} + $${DEL_FEE} delivery = <b style="color:var(--gold)">$${cc||ucart.size?cost+DEL_FEE:0}</b></span><button class="btn" id="orderBtn" ${(!cc&&!ucart.size)||busy||S.money<cost+DEL_FEE?'disabled':''}>${busy?(tuk.state==='wait'?'Tuk tuk on the way':'Tuk tuk is out'):'Order delivery'}</button></div>
+    <p class="note">New dishes arrive with the tuk tuk as a recipe kit and go on the menu once he's dropped it off. Every dish's other ingredients are then free on the storeroom shelves; chicken and rice are ordered here. The tuk tuk comes in through the garage door here in the storeroom and drops the crates on the floor. Press E on a crate to put it on the shelves.</p><div class="btns"><button class="btn ghost" id="pcClose">Log off</button></div>`;
+    ORDERABLE.filter(ingOpen).forEach(k=>{$('add-'+k).onclick=()=>{cart[k]=(cart[k]||0)+1;renderPC()};$('sub-'+k).onclick=()=>{cart[k]=Math.max(0,(cart[k]||0)-1);renderPC()}});
+    DISH_KEYS.forEach(k=>{const b=$('un-'+k);if(b)b.onclick=()=>{if(ucart.has(k))ucart.delete(k);else ucart.add(k);renderPC()}});
+    $('orderBtn').onclick=()=>{if((!cartCount()&&!ucart.size)||S.money<cartCost()+DEL_FEE||tuk.state!=='idle')return;const copy={...cart},uc=[...ucart];Object.keys(cart).forEach(k=>delete cart[k]);ucart.clear();doAct({a:'ord',c:copy,u:uc});if(NET.role==='client')toast('Order sent','');renderPC()}}
   else if(pcTab==='bank'){b.innerHTML=`<div class="stat"><span>Cash</span><span style="color:var(--gold)">$${S.money}</span><span>Loan owed</span><span style="color:${S.debt?'var(--bad)':'var(--good)'}">$${S.debt}</span><span>Interest</span><span>10% per day</span><span>Bank closes you at</span><span>$${DEBT_LIMIT}</span><span class="t">Tonight's quota</span><span class="t">$${quota(S.day)}</span></div>
     <p class="note">The quota is rent, gas and wages. It comes out of your cash at closing. Whatever you can't cover is added to the loan.</p>
     <div class="pay">${[10,50].map(v=>`<button class="btn ghost" id="pay${v}" ${!S.debt||S.money<Math.min(v,S.debt)?'disabled':''}>Pay $${v}</button>`).join('')}<button class="btn" id="payAll" ${!S.debt||!S.money?'disabled':''}>Pay all I can</button></div><div class="btns"><button class="btn ghost" id="pcClose">Log off</button></div>`;
@@ -1284,11 +1300,12 @@ function placeLabel(el,pos,maxD){const d=camera.position.distanceTo(pos);_v.copy
 /* =============== INPUT =============== */
 const cv=renderer.domElement;let dragging=false,wantPause=true;
 const locked=()=>document.pointerLockElement===cv;
-function lock(){try{const p=cv.requestPointerLock&&cv.requestPointerLock();if(p&&p.catch)p.catch(()=>{})}catch(e){}}
+function lock(){try{let p=cv.requestPointerLock&&cv.requestPointerLock({unadjustedMovement:true});if(p&&p.catch)p.catch(()=>{try{const q=cv.requestPointerLock();if(q&&q.catch)q.catch(()=>{})}catch(e){}})}catch(e){try{cv.requestPointerLock()}catch(e2){}}}
 function exitLock(){wantPause=false;try{if(locked())document.exitPointerLock()}catch(e){}setTimeout(()=>wantPause=true,250)}
 cv.addEventListener('mousedown',()=>{if(S.mode!=='play'||uiOpen())return;if(!locked()){lock();dragging=true}});
 addEventListener('mouseup',()=>dragging=false);
-addEventListener('mousemove',e=>{if(S.mode!=='play'||uiOpen())return;if(!locked()&&!dragging)return;P.yaw-=e.movementX*0.0024;P.pitch=clamp(P.pitch-e.movementY*0.0024,-1.35,1.2)});
+const MOUSE={dx:0,dy:0};addEventListener('mousemove',e=>{if(S.mode!=='play'||uiOpen())return;if(!locked()&&!dragging)return;const mx=e.movementX||0,my=e.movementY||0;if(Math.abs(mx)>400||Math.abs(my)>400)return;MOUSE.dx+=mx;MOUSE.dy+=my});
+function applyMouse(){if(MOUSE.dx||MOUSE.dy){P.yaw-=MOUSE.dx*0.0024;P.pitch=clamp(P.pitch-MOUSE.dy*0.0024,-1.35,1.2);MOUSE.dx=MOUSE.dy=0}}
 document.addEventListener('pointerlockchange',()=>{$('lookhint').hidden=locked()||S.mode!=='play';if(!locked()&&S.mode==='play'&&!uiOpen()&&wantPause&&!S.paused)togglePause()});
 addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space')e.preventDefault();
   if(!$('title').hidden||!$('dayend').hidden)return;
@@ -1309,7 +1326,8 @@ $('bResume').onclick=()=>{togglePause();lock()};
 /* =============== DAY FLOW =============== */
 let spawnT=4;
 function startDay(){NET.summary=null;S.spills=[];syncSpills();S.power=1;stations.forEach(st=>setFire(st,false));chaosT=rand(35,55);S.mode='play';S.clock=0;S.closing=false;S.ds=newDS();spawnT=4;S.prep=[];S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;
-  refreshShelves();refreshHands();refreshPrep();refreshFridge();updateHUD();toast(`Day ${S.day} — doors open · quota $${quota(S.day)}`,'gold')}
+  refreshShelves();refreshHands();refreshPrep();refreshFridge();refreshMenuSign();updateHUD();toast(`Day ${S.day} — doors open · quota $${quota(S.day)}`,'gold');
+  const nw=DISH_KEYS.filter(k=>DISHES[k].day===S.day&&!onMenu(k));if(nw.length)setTimeout(()=>chaosEvent('NEW DISH AVAILABLE',nw.map(k=>ITEMS[k].name).join(' + ')+' — buy the recipe kit on the PC','critic'),2500)}
 function endDay(){S.mode='dayend';exitLock();const q=quota(S.day);const interest=Math.round(S.debt*0.10);S.debt+=interest;
   const paid=Math.min(q,S.money),short=q-paid;S.money-=paid;S.debt+=short;
   const net=S.ds.rev+S.ds.tips-S.ds.spent-q,over=S.debt>DEBT_LIMIT;NET.summary=[S.ds.rev,S.ds.tips,S.ds.spent,q,short,S.money,S.debt,over?1:0];
@@ -1423,14 +1441,15 @@ function doAct(act){if(NET.role==='client'){NET.outbox.push([++NET.seq,act]);if(
 function execAct(act,peer){
   const run=()=>{switch(act.a){
     case 'u':{const f=byRef(act.r);if(f)useMut(f);break}
-    case 'ck':{const st=byRef(act.r);const slot=st&&st.slots&&st.slots[act.si];if(!slot||!st.recipes.includes(act.k))break;if(slot.state!=='empty'){toast(`${st.name} is busy`,'bad');break}if(!haveFor(act.k)){toast('Missing ingredients','bad');break}startCook(st,slot,act.k);toast(`${st.kind==='pour'?'Pouring':'Cooking'} ${ITEMS[act.k].name}`,'');break}
-    case 'fd':{const k=act.k==='cola'?'cola':'ayran';if(S.fridge[k]<=0){toast('None left in the fridge','bad');break}if(hold(k==='cola'?'cola':'b_ayran')){S.fridge[k]--;refreshFridge()}break}
+    case 'ck':{const st=byRef(act.r);const slot=st&&st.slots&&st.slots[act.si];if(!slot||!st.recipes.includes(act.k)||!onMenu(act.k))break;if(slot.state!=='empty'){toast(`${st.name} is busy`,'bad');break}if(!haveFor(act.k)){toast('Missing ingredients','bad');break}startCook(st,slot,act.k);toast(`${st.kind==='pour'?'Pouring':'Cooking'} ${ITEMS[act.k].name}`,'');break}
+    case 'fd':{const k=act.k==='cola'?'cola':'ayran';if(!onMenu(k))break;if(S.fridge[k]<=0){toast('None left in the fridge','bad');break}if(hold(k==='cola'?'cola':'b_ayran')){S.fridge[k]--;refreshFridge()}break}
     case 'pt':{const i=S.prep.findIndex(h=>h.k===act.k);if(i>=0&&hold(act.k)){S.prep.splice(i,1);refreshPrep()}break}
     case 'q':{dropAt(act.x,act.z);break}
     case 'th':{throwItem(+act.x||0,+act.z||0,+act.yaw||0,+act.pitch||0,clamp(+act.pw||0,0,1),peer||selfKey());break}
-    case 'ord':{const c={};let n=0,cost=0;ORDERABLE.forEach(k=>{const v=Math.max(0,Math.min(10,act.c&&act.c[k]|0));if(v){c[k]=v;n+=v;cost+=v*INGS[k].cost}});
-      if(!n)break;if(tuk.state!=='idle'){toast('The tuk tuk is already out','bad');break}if(n>CRATE_SPOTS.filter(x=>!x.used).length){toast('No floor space for that many crates','bad');break}if(S.money<cost+DEL_FEE){toast('Not enough cash','bad');break}
-      S.money-=cost+DEL_FEE;S.ds.spent+=cost+DEL_FEE;orderDelivery(c);updateHUD();break}
+    case 'ord':{const c={};let n=0,cost=0;ORDERABLE.filter(ingOpen).forEach(k=>{const v=Math.max(0,Math.min(10,act.c&&act.c[k]|0));if(v){c[k]=v;n+=v;cost+=v*INGS[k].cost}});
+      const uk=(Array.isArray(act.u)?act.u:[]).filter((k,i,a)=>DISHES[k]&&DISHES[k].cost&&!onMenu(k)&&DISHES[k].day<=S.day&&a.indexOf(k)===i);uk.forEach(k=>cost+=DISHES[k].cost);
+      if(!n&&!uk.length)break;if(tuk.state!=='idle'){toast('The tuk tuk is already out','bad');break}if(n>CRATE_SPOTS.filter(x=>!x.used).length){toast('No floor space for that many crates','bad');break}if(S.money<cost+DEL_FEE){toast('Not enough cash','bad');break}
+      S.money-=cost+DEL_FEE;S.ds.spent+=cost+DEL_FEE;orderDelivery(c,uk);updateHUD();break}
     case 'pay':{const n=Math.min(Math.max(0,+act.v||0),S.debt,S.money);S.money-=n;S.debt-=n;updateHUD();if(n&&!S.debt)toast('Loan paid off','good');break}
   }};
   if(!peer){run();return}
@@ -1440,7 +1459,7 @@ function makeSnap(){const sl=[];stations.forEach(st=>st.slots.forEach(x=>sl.push
   return {m:S.mode==='dayend'?2:1,d:S.day,c:Math.round(S.clock),cl:S.closing?1:0,mo:S.money,db:S.debt,r:Math.round(avgRating()*10),sv:S.ds.served,wk:S.ds.walked,
     st:ORDERABLE.map(k=>S.stock[k]),fr:[S.fridge.cola,S.fridge.ayran],pp:S.prep.map(x=>IK.indexOf(x.k)),sl,
     cu:customers.map(c=>[c.id,c.seed,SEATS.indexOf(c.seat),c.leaving?3:c.state==='walk'?0:c.state==='seated'?1:2,Math.round(c.mesh.position.x*20),Math.round(c.mesh.position.z*20),Math.round(c.mesh.rotation.y*100),c.order.map(k=>IK.indexOf(k)),Math.round(Math.max(0,c.patience/c.maxPat)*100),c.served.map(k=>IK.indexOf(k)),c.crit?1:0]),
-    cr:CRATE_SPOTS.map(sp=>sp.used&&sp.used!=='reserved'?[ING_KEYS.indexOf(sp.used.ing),Math.round(sp.x*100),Math.round(sp.z*100)]:-1),tk:[TUKS.indexOf(tuk.state),Math.round(tuk.x*10),Math.round(doorOpen*100),tuk.phrase|0,tuk.phrase2|0],gr:GROUND.map(o=>{const a=[o.id,IK.indexOf(o.k),o.q||0,Math.round((o.fly?o.fly.lx??o.group.position.x:o.group.position.x)*100),Math.round((o.fly?o.fly.lz??o.group.position.z:o.group.position.z)*100)];if(o.throwT&&performance.now()-o.throwT<1500)a.push(Math.round(o.fly?o.fly.fx*100:0),Math.round(o.fly?o.fly.fz*100:0));return a}),ps:S.pass.map(k=>k?IK.indexOf(k):-1),fi:stations.map(st=>st.fire?1:0),sp:S.spills.map(x=>[x.id,Math.round(x.x*100),Math.round(x.z*100)]),pw:S.power,ev:S.ev,go:S.go,kn:Object.keys(S.knock).map(k=>[k,Math.round(S.knock[k]*10)]),tw:[S.wall.ext,S.wall.broom],h,ak,ms,ds:NET.summary}}
+    cr:CRATE_SPOTS.map(sp=>sp.used&&sp.used!=='reserved'?[ING_KEYS.indexOf(sp.used.ing),Math.round(sp.x*100),Math.round(sp.z*100)]:-1),tk:[TUKS.indexOf(tuk.state),Math.round(tuk.x*10),Math.round(doorOpen*100),tuk.phrase|0,tuk.phrase2|0],gr:GROUND.map(o=>{const a=[o.id,IK.indexOf(o.k),o.q||0,Math.round((o.fly?o.fly.lx??o.group.position.x:o.group.position.x)*100),Math.round((o.fly?o.fly.lz??o.group.position.z:o.group.position.z)*100)];if(o.throwT&&performance.now()-o.throwT<1500)a.push(Math.round(o.fly?o.fly.fx*100:0),Math.round(o.fly?o.fly.fz*100:0));return a}),ps:S.pass.map(k=>k?IK.indexOf(k):-1),fi:stations.map(st=>st.fire?1:0),sp:S.spills.map(x=>[x.id,Math.round(x.x*100),Math.round(x.z*100)]),pw:S.power,ev:S.ev,mn:S.menu,go:S.go,kn:Object.keys(S.knock).map(k=>[k,Math.round(S.knock[k]*10)]),tw:[S.wall.ext,S.wall.broom],h,ak,ms,ds:NET.summary}}
 function applySnap(g){if(!g||typeof g!=='object')return;
   S.day=g.d|0;S.clock=+g.c||0;S.closing=!!g.cl;S.money=g.mo|0;S.debt=g.db|0;S.ratings=[(g.r|0)/10];S.ds.served=g.sv|0;S.ds.walked=g.wk|0;
   if(Array.isArray(g.st))ORDERABLE.forEach((k,i)=>S.stock[k]=g.st[i]|0);refreshShelves();
@@ -1459,6 +1478,7 @@ function applySnap(g){if(!g||typeof g!=='object')return;
   if(Array.isArray(g.tw)&&(g.tw[0]!==S.wall.ext||g.tw[1]!==S.wall.broom)){S.wall.ext=g.tw[0]?1:0;S.wall.broom=g.tw[1]?1:0;refreshTools()}
   if(Array.isArray(g.kn)){const me=g.kn.find(e=>Array.isArray(e)&&e[0]===NET.myPeer);if(me&&me[1]!==NET.knockStamp)startKnock(me[1])}
   if(typeof g.go==='number'&&g.go!==S.go){const was=S.go;S.go=g.go;goT=0;if(S.go===2&&was<2)playBoss();if(S.go===3&&was<3)explode()}
+  if(Array.isArray(g.mn)&&g.mn.join()!==S.menu.join()){S.menu=g.mn.filter(k=>DISHES[k]);refreshShelves();refreshMenuSign()}
   if(g.pw===0||g.pw===1){if(g.pw===0&&S.power!==0)S.powerT=22;S.power=g.pw}
   if(NET.evSeen===undefined)NET.evSeen=Array.isArray(g.ev)?g.ev[0]:0;
   else if(Array.isArray(g.ev)){if(g.ev[0]>NET.evSeen){NET.evSeen=g.ev[0];showBanner(String(g.ev[1]),String(g.ev[2]||''));sfx.sting(g.ev[3])}}
@@ -1562,23 +1582,23 @@ $('fJoin').addEventListener('submit',async e=>{e.preventDefault();const code=$('
   P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();toast('Joined the lobby — click the game to look around','gold')});
 
 /* =============== LOOP =============== */
-let last=performance.now(),hudT=0;
+let last=performance.now(),hudT=0;const _lp=new THREE.Vector3();
 function frame(now){requestAnimationFrame(frame);const dt=Math.min(0.05,(now-last)/1000);last=now;
   const sim=S.mode==='play'&&(!S.paused||NET.role!=='solo');
   if(sim&&NET.role==='client'){updatePlayer(dt);updateStations(dt);updateParts(dt);updateFlights(dt);updateDriver(dt);updateSplinters(dt);updateGroundFly(dt);updateFires(dt);updateClientCusts(dt);if(S.go){goT+=0;clientGameOver(dt)}tuk.x+=((tuk.tx||tuk.x)-tuk.x)*Math.min(1,dt*6);tuk.g.position.x=tuk.x;if((hudT+=dt)>0.25){hudT=0;updateHUD()}}
   else if(sim){updatePlayer(dt);updateStations(dt);for(let i=customers.length-1;i>=0;i--)updateCustomer(customers[i],dt);updateTuk(dt);updateFlights(dt);updateDriver(dt);updateSplinters(dt);updateGroundFly(dt);updateFires(dt);updateParts(dt);updateDay(dt);if((hudT+=dt)>0.25){hudT=0;updateHUD()}}
   netTick(dt);updateAvatars(dt);
   if(S.mode==='title')P.yaw+=dt*0.06;
-  updateCamera();updateArms(dt);updateSky();
+  applyMouse();updateCamera();updateArms(dt);updateSky();
   updateFireballs(dt);updateLights(dt,now);updateDoor(dt);updateAmbient(dt);if(P.charging&&(!S.hands.length||uiOpen()))P.charging=false;$('meter').hidden=!P.charging;if(P.charging)$('meterBar').style.width=(P.charge*100)+'%';if(fuseObj.lever)fuseObj.lever.rotation.x=S.power===0?2.6:0;
   FANS.forEach((f,i)=>f.rotation.y+=dt*(3.2+i*0.2));
   if(tvTex&&(tvT-=dt)<=0){tvT=0.12;tvBall=(tvBall+1)%60;const g=tvTex.userData.cv.getContext('2d');g.fillStyle='#3f8a3a';g.fillRect(0,0,64,40);g.fillStyle='#4f9a44';for(let i=0;i<64;i+=8)g.fillRect(i,0,4,40);g.fillStyle='#c8b07a';g.fillRect(28,8,8,24);g.fillStyle='#f4f1e8';g.fillRect(29,9,6,1);g.fillRect(29,30,6,1);
     g.fillStyle='#1f3a8a';g.fillRect(31,26,2,5);g.fillRect(31,8,2,4);const bx=32+Math.sin(tvBall/9.5)*20,by=20-Math.cos(tvBall/6)*14;g.fillStyle='#c8161c';g.fillRect(bx,by,2,2);
     g.fillStyle='#0a1a3a';g.fillRect(0,32,64,8);g.fillStyle='#f2b02e';g.font='6px monospace';g.fillText('PAK 182/4  18.2 ov',2,38);tvTex.needsUpdate=true}
   if(AC&&musicOn){tickMusic();const d=Math.hypot(tuk.x-P.x,-4.7-P.z);const v=(tuk.state==='idle'||tuk.state==='wait')?0:clamp(1-d/28,0.06,1)*0.38;musicBus.gain.setTargetAtTime(v,AC.currentTime,0.1);musicBus.lp.frequency.setTargetAtTime(tuk.x>10.3&&doorOpen<0.5?900:6000,AC.currentTime,0.2)}
-  if(S.mode==='play'){updateFocus();for(const st of stations)for(const s of st.slots)if(s.el)placeLabel(s.el,s.pos.clone().add(new THREE.Vector3(0,0.45,0)),9);
-    for(const c of NET.ccust.values())if(c.el)placeLabel(c.el,c.mesh.position.clone().add(new THREE.Vector3(0,c.state==='walk'?2.1:1.75,0)),16);
-    for(const c of customers)if(c.el)placeLabel(c.el,c.mesh.position.clone().add(new THREE.Vector3(0,c.state==='walk'?2.1:1.75,0)),16);
+  if(S.mode==='play'){updateFocus();for(const st of stations)for(const s of st.slots)if(s.el)placeLabel(s.el,_lp.copy(s.pos).setY(s.pos.y+0.45),9);
+    for(const c of NET.ccust.values())if(c.el)placeLabel(c.el,_lp.copy(c.mesh.position).setY(c.mesh.position.y+(c.state==='walk'?2.1:1.75)),16);
+    for(const c of customers)if(c.el)placeLabel(c.el,_lp.copy(c.mesh.position).setY(c.mesh.position.y+(c.state==='walk'?2.1:1.75)),16);
     for(let i=floats.length-1;i>=0;i--){const f=floats[i];f.t+=dt;f.pos.y+=dt*0.5;placeLabel(f.el,f.pos,30);f.el.style.opacity=1-f.t/1.8;if(f.t>1.8){f.el.remove();floats.splice(i,1)}}}
   if(shoutEl){shoutT-=dt;if(shoutT>0&&tuk.g.visible)placeLabel(shoutEl,new THREE.Vector3(tuk.x-0.3,2.5,-4.7),30);else shoutEl.style.display='none'}
   renderer.render(scene,camera);if(fp.visible&&S.mode!=='title'){renderer.autoClear=false;renderer.clearDepth();renderer.render(fpScene,camera);renderer.autoClear=true}}
@@ -1588,7 +1608,7 @@ if(load()){$('bStart').textContent=`Play solo · day ${S.day}`;$('bNew').hidden=
 $('bStart').onclick=()=>{saveName();NET.name=nameVal();initAudio();if(AC&&AC.state==='suspended')AC.resume();startDay();lock()};
 $('bNew').onclick=()=>{try{localStorage.removeItem(SAVEKEY)}catch(e){}location.reload()};
 scene.traverse(o=>{if(o.isPointLight&&!LANTERNS.includes(o)&&o!==fireLight&&o!==alarmLight)ALL_PL.push([o,o.intensity])});
-setDoor(0);refreshShelves();refreshHands();refreshPrep();refreshFridge();updateHUD();
+setDoor(0);refreshMenuSign();refreshShelves();try{renderer.compile(scene,camera);renderer.compile(fpScene,camera)}catch(e){}refreshHands();refreshPrep();refreshFridge();updateHUD();
 requestAnimationFrame(frame);
 })();
 </script>
