@@ -201,7 +201,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
 <div class="ov" id="goCard" hidden><div class="card"><div class="stripe"></div><h2>GAME OVER</h2><div class="body"><p class="note" id="goText">The boss was not proud. Multan Dhaba is gone.</p><div class="btns" style="justify-content:center"><button class="btn" id="goNew">Start a new game</button></div></div></div></div>
 <div class="ov" id="dayend" hidden><div class="card"><div class="stripe"></div><h2><span id="deTitle">Day 1 closed</span></h2><div class="body" id="deBody"></div></div></div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (()=>{
@@ -275,7 +275,7 @@ const unlockable=()=>DISH_KEYS.filter(k=>!onMenu(k)&&DISHES[k].day<=S.day);
 S.ds=newDS();
 const SAVEKEY='multan-dhaba-v5';
 const ORDERABLE=['chicken','rice'];
-function save(){try{localStorage.setItem(SAVEKEY,JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}}
+function save(){try{localStorage.setItem(SAVEKEY,JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}worldSave()}
 function load(){try{const d=JSON.parse(localStorage.getItem(SAVEKEY)||'null');if(d&&d.day){if(Array.isArray(d.menu))S.menu=d.menu.filter(k=>DISHES[k]);S.money=d.money;S.debt=d.debt||0;S.day=d.day;S.ratings=d.ratings||[];Object.assign(S.stock,d.stock);Object.assign(S.fridge,d.fridge||{});return true}}catch(e){}return false}
 
 /* =============== NET STATE =============== */
@@ -1335,14 +1335,14 @@ function startDay(){NET.summary=null;S.spills=[];syncSpills();S.power=1;stations
 function endDay(){S.mode='dayend';exitLock();const q=quota(S.day);const interest=Math.round(S.debt*0.10);S.debt+=interest;
   const paid=Math.min(q,S.money),short=q-paid;S.money-=paid;S.debt+=short;
   const net=S.ds.rev+S.ds.tips-S.ds.spent-q,over=S.debt>DEBT_LIMIT;NET.summary=[S.ds.rev,S.ds.tips,S.ds.spent,q,short,S.money,S.debt,over?1:0];
-  if(over){try{localStorage.removeItem(SAVEKEY)}catch(e){}S.mode='play';lock();gameOverStart();return}
+  if(over){wipeSave();S.mode='play';lock();gameOverStart();return}
   $('deTitle').textContent=`Day ${S.day} closed`;
   $('deBody').innerHTML=`<div class="stat"><span>Food sales</span><span>$${S.ds.rev}</span><span>Tips</span><span>$${S.ds.tips}</span><span>Stock + delivery</span><span>−$${S.ds.spent}</span><span>Quota (rent, gas, wages)</span><span>−$${q}</span><span class="t">Day result</span><span class="t" style="color:${net>=0?'var(--good)':'var(--bad)'}">${net>=0?'+':'−'}$${Math.abs(net)}</span>
     <span>Served / walked out</span><span>${S.ds.served} / ${S.ds.walked}</span>${interest?`<span>Loan interest</span><span style="color:var(--bad)">+$${interest}</span>`:''}${short?`<span>Quota you couldn't cover</span><span style="color:var(--bad)">+$${short} to loan</span>`:''}<span>Cash</span><span style="color:var(--gold)">$${S.money}</span><span>Loan</span><span style="color:${S.debt?'var(--bad)':'var(--good)'}">$${S.debt}</span></div>
     <p class="note">${over?'The bank called in the loan. Multan Dhaba is closed.':short?'You missed the quota. Pay the loan off on the PC before the interest stacks up.':S.debt?'Quota met. You still owe the bank — pay it down on the PC.':'Quota met. Tomorrow is busier and the quota goes up.'}</p>
     <div class="btns">${over?'<button class="btn" id="deRestart">Start over</button>':`<button class="btn" id="deNext">Open day ${S.day+1} · quota $${quota(S.day+1)}</button>`}</div>`;
   $('dayend').hidden=false;
-  if(over){try{localStorage.removeItem(SAVEKEY)}catch(e){}$('deRestart').onclick=()=>location.reload()}
+  if(over){wipeSave();$('deRestart').onclick=()=>location.reload()}
   else{S.day++;save();$('deNext').onclick=()=>{startDay();lock()};if(NET.role==='host')setTimeout(()=>{if(S.mode==='dayend'&&!$('dayend').hidden)$('deNext').click()},15000)}}
 function updateDay(dt){if(S.go){updateGameOver(dt);return}S.clock+=dt;
   if(!S.closing&&S.clock>=DAY_LEN){S.closing=true;toast('Closing time — finish the last tables','gold')}
@@ -1524,11 +1524,12 @@ const myP=()=>[Math.round(P.x*100),Math.round(P.z*100),Math.round(P.yaw*100)];
 let badgeT=0;
 function netTick(dt){if(NET.role==='solo'||!NET.nroom)return;NET.sendT-=dt;const r=NET.nroom;let peers=[];try{peers=r.peers()}catch(e){}
   if(!NET.myPeer){const me=peers.find(p=>p.sameTab);if(me)NET.myPeer=me.peer}
+  if(NET.role==='host'&&!ROOM.isPeer&&NET.myPeer&&peers.some(p=>!p.sameTab&&p.presence&&p.presence.role==='h'&&p.presence.g&&p.peer<NET.myPeer)){demoteToClient();return}
   if(NET.role==='host'){const live=new Set();
     for(const p of peers){if(p.sameTab)continue;const pr=p.presence||{};if(pr.role!=='c')continue;live.add(p.peer);const pl=getPlayer(p.peer);
       for(const e of (Array.isArray(pr.q)?pr.q:[])){if(!Array.isArray(e)||typeof e[0]!=='number'||!e[1]||typeof e[1].a!=='string')continue;if(e[0]>pl.lastSeq){pl.lastSeq=e[0];if(S.mode==='play'||e[1].a==='pay')execAct(e[1],p.peer)}}}
     for(const k in NET.players)if(!live.has(k))delete NET.players[k];
-    if(NET.sendT<=0){NET.sendT=0.1;const sn=makeSnap();while(JSON.stringify(sn).length>3500&&sn.gr.length)sn.gr.shift();r.presence({role:'h',nm:NET.name,p:myP(),kd:P.down>0?1:0,g:sn}).catch(()=>{})}}
+    if((NET.saveT=(NET.saveT||0)-dt)<=0){NET.saveT=10;worldSave()}if(NET.sendT<=0){NET.sendT=0.1;const sn=makeSnap();while(JSON.stringify(sn).length>3500&&sn.gr.length)sn.gr.shift();r.presence({role:'h',nm:NET.name,p:myP(),kd:P.down>0?1:0,g:sn}).catch(()=>{})}}
   else{const host=peers.find(p=>!p.sameTab&&p.presence&&p.presence.role==='h');
     if(host){NET.hostSeen=performance.now();if(host.presence.g&&host.presence.g!==NET.lastG){NET.lastG=host.presence.g;applySnap(NET.lastG)}}
     else if(performance.now()-NET.hostSeen>4000){migrateHost();return}
@@ -1578,6 +1579,30 @@ function peerRoom(){const R={isPeer:true,info:()=>({nm:'Someone',n:1,d:1})};
     p.on('open',()=>{for(let i=0;i<OPEN_SLOTS;i++){const c=p.connect(openId(i),{reliable:true,serialization:'json'});c.on('open',()=>{try{c.send({t:'info'})}catch(e){}});
       c.on('data',d=>{if(d&&d.t==='info'&&!found.some(f=>f.slot===i)){found.push({slot:i,nm:String(d.nm||'Someone').slice(0,16),n:d.n|0,d:d.d|0,full:!!d.full});try{c.close()}catch(e){}if(misses+found.length>=OPEN_SLOTS)fin()}})}})});
   return R}
+// Relay lobby for the web build: every player talks through public MQTT brokers over WebSockets (works on any network,
+// no browser-to-browser connection needed). Same interface as the claude.ai room: join(name) -> {presence, peers, leave}.
+const BROKERS=['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mqtt'];
+function mqttRoom(){const R={isRelay:true};
+  R.join=name=>new Promise((res,rej)=>{const me='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);const base='multan-dhaba-x7q/'+name+'/';
+    const st={pres:{},others:{},saved:null,cls:[]};let pending=BROKERS.length,done=false;
+    const finish=()=>{if(done)return;done=true;if(!st.cls.length)rej({code:'net',type:'relay'});else res(api)};
+    const onMsg=(topic,buf)=>{let txt='';try{txt=buf.toString()}catch(e){return}
+      if(topic===base+'save'){if(!txt)return;try{const d=JSON.parse(txt);if(d&&d.day&&(!st.saved||(d.t||0)>(st.saved.t||0)))st.saved=d}catch(e){}return}
+      const id=topic.slice((base+'p/').length);if(!id||id===me)return;
+      if(!txt){delete st.others[id];return}if(txt.length>9000)return;
+      try{const m=JSON.parse(txt);if(!m||typeof m!=='object'||!m.p||typeof m.p!=='object'||Array.isArray(m.p))return;const o=st.others[id];if(o&&(m.s|0)<=o.s&&performance.now()-o.t<3000)return;st.others[id]={p:m.p,s:m.s|0,t:performance.now()}}catch(e){}};
+    for(const url of BROKERS){let c;try{c=mqtt.connect(url,{clientId:me+'-'+BROKERS.indexOf(url),reconnectPeriod:2000,connectTimeout:7000,keepalive:20,clean:true,will:{topic:base+'p/'+me,payload:'',qos:0,retain:false}})}catch(e){if(--pending===0)finish();continue}
+      let first=true;c.on('connect',()=>{c.subscribe([base+'p/+',base+'save'],{qos:0});if(first){first=false;st.cls.push(c);if(!done)setTimeout(finish,900)}});
+      c.on('message',onMsg);c.on('error',()=>{});
+      setTimeout(()=>{if(first){first=false;if(--pending===0)finish()}},7500)}
+    setTimeout(finish,8000);let seq=0;
+    const pub=(t,v,ret)=>{for(const c of st.cls)if(c.connected){try{c.publish(t,v,{qos:0,retain:!!ret})}catch(e){}}};
+    const api={presence:async patch=>{for(const k in patch){if(patch[k]===null)delete st.pres[k];else st.pres[k]=patch[k]}pub(base+'p/'+me,JSON.stringify({s:++seq,p:st.pres}))},
+      peers:()=>{const out=[{peer:me,sameTab:true,isMe:true,presence:st.pres}];const now=performance.now();for(const id in st.others){const o=st.others[id];if(now-o.t<4500)out.push({peer:id,sameTab:false,isMe:false,presence:o.p});else if(now-o.t>30000)delete st.others[id]}return out},
+      leave:async()=>{pub(base+'p/'+me,'');setTimeout(()=>{for(const c of st.cls){try{c.end(true)}catch(e){}}},150)},
+      saved:()=>st.saved,save:d=>pub(base+'save',d?JSON.stringify(Object.assign({t:Date.now()},d)):'',true),
+      connected:()=>st.cls.some(c=>c.connected)}});
+  return R}
 // ===== ONE SHARED WORLD: first player in runs the restaurant, everyone else joins it =====
 const WORLD='dhaba-world-world';addEventListener('beforeunload',()=>{try{NET.nroom&&NET.nroom.leave()}catch(e){}});const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function joinWorld(){if(joining)return;joining=true;saveName();NET.name=nameVal();initAudio();if(AC&&AC.state==='suspended')AC.resume();
@@ -1586,12 +1611,16 @@ async function joinWorld(){if(joining)return;joining=true;saveName();NET.name=na
   try{if(ROOM.isPeer){let r=null;
       try{r=await ROOM.join(WORLD,false)}catch(e){if(e&&e.code==='no_lobby'){try{const h=await ROOM.join(WORLD,true);becomeHost(h,true);return}catch(e2){if(e2&&e2.code==='taken'){r=await ROOM.join(WORLD,false)}else throw e2}}else throw e}
       if(!(await enterAsClient(r))){const h=await ROOM.join(WORLD,true);becomeHost(h,true)}}
-    else{const r=await ROOM.join(WORLD);const t0=performance.now();while(performance.now()-t0<3000&&!hostIn(r))await sleep(200);if(hostIn(r))await enterAsClient(r);else becomeHost(r,true)}}
+    else{const r=await ROOM.join(WORLD);r.presence({role:'w',nm:NET.name}).catch(()=>{});const t0=performance.now();while(performance.now()-t0<3000&&!hostIn(r))await sleep(200);
+      if(!hostIn(r)){let me=null;const t1=performance.now();while(performance.now()-t1<1800&&!hostIn(r)){await sleep(200);r.presence({role:'w',nm:NET.name}).catch(()=>{})}
+        let ps=[];try{ps=r.peers()}catch(e){}me=(ps.find(p=>p.sameTab)||{}).peer;const rivals=ps.filter(p=>!p.sameTab&&p.presence&&(p.presence.role==='w'||p.presence.role==='h')).map(p=>p.peer);
+        if(!hostIn(r)&&!rivals.some(x=>x<me)){becomeHost(r,true);return}}
+      if(!(await enterAsClient(r,true)))becomeHost(r,true)}}
   catch(e){mpStatus('Could not connect ('+((e&&(e.type||e.code))||'network')+'). Press PLAY to try again. School or work Wi-Fi sometimes blocks this.',true)}
   finally{joining=false;$('bStart').disabled=false}}
 const hostIn=r=>{try{return r.peers().some(p=>!p.sameTab&&p.presence&&p.presence.role==='h'&&p.presence.g)}catch(e){return false}};
-function becomeHost(api,fresh){NET.nroom=api;NET.role='host';NET.code='world';NET.myPeer=null;NET.players={};lock();if(fresh){startDay();toast('You\'re the first one here — you run the restaurant until someone else takes over','gold')}}
-async function enterAsClient(r){const t0=performance.now();while(performance.now()-t0<8000&&!hostIn(r))await sleep(250);if(!hostIn(r)){try{r.leave()}catch(e){}return false}
+function becomeHost(api,fresh){NET.nroom=api;NET.role='host';NET.code='world';NET.myPeer=null;NET.players={};lock();if(fresh){loadWorld(api);startDay();toast('You\'re the first one here — you run the restaurant until someone else takes over','gold')}}
+async function enterAsClient(r,keep){const t0=performance.now();while(performance.now()-t0<8000&&!hostIn(r))await sleep(250);if(!hostIn(r)){if(!keep){try{r.leave()}catch(e){}}return false}
   NET.nroom=r;NET.role='client';NET.code='world';NET.myPeer=null;NET.hostSeen=performance.now();NET.lastG=null;
   P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();lock();toast('You joined the restaurant — click the game to look around','gold');return true}
 // the host left: hand the restaurant to someone else, keeping the shared day, money, menu and stock
@@ -1602,6 +1631,15 @@ function migrateHost(){if(NET.migrating)return;NET.migrating=true;
     catch(e){try{const r=await ROOM.join(WORLD,false);NET.nroom=r;NET.myPeer=null;NET.lastG=null;NET.hostSeen=performance.now();toast('The host left — reconnected to the new one','')}
       catch(e2){toast('Lost the connection — retrying…','bad');NET.migrating=false;setTimeout(migrateHost,3000);return}}
     NET.migrating=false})()}
+function loadWorld(api){let d=null;try{d=api.saved&&api.saved()}catch(e){}if(!d||!d.day)return;
+  if(Array.isArray(d.menu))S.menu=d.menu.filter(k=>DISHES[k]);S.money=d.money|0;S.debt=d.debt|0;S.day=d.day|0;S.ratings=Array.isArray(d.ratings)?d.ratings:[];
+  if(d.stock&&typeof d.stock==='object')for(const k in S.stock)if(typeof d.stock[k]==='number')S.stock[k]=d.stock[k];if(d.fridge&&typeof d.fridge==='object')Object.assign(S.fridge,d.fridge);
+  refreshShelves();refreshFridge();refreshMenuSign()}
+function worldSave(){if(NET.role==='host'&&NET.nroom&&NET.nroom.save)NET.nroom.save({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)})}
+function wipeSave(){try{localStorage.removeItem(SAVEKEY)}catch(e){}try{NET.role==='host'&&NET.nroom&&NET.nroom.save&&NET.nroom.save(null)}catch(e){}}
+// two players claimed the restaurant at once: the newer one hands over and joins the other
+function demoteToClient(){for(const c of customers.slice()){scene.remove(c.mesh);c.el.remove();unreg(c);c.plates.forEach(m=>scene.remove(m));if(c.seat)c.seat.taken=false}customers.length=0;
+  NET.players={};NET.role='client';NET.lastG=null;NET.hostSeen=performance.now();NET.outbox=[];S.hands=[];refreshHands();toast('Joined the other restaurant host','')}
 function promoteToHost(api){for(const [id,c] of NET.ccust){scene.remove(c.mesh);c.el.remove();unreg(c);c.plates.forEach(m=>scene.remove(m))}NET.ccust.clear();
   NET.players={};NET.lastG=null;NET.myPeer=null;NET.nroom=api;NET.role='host';spawnT=3;
   if(tuk.state!=='idle'){tuk.state='idle';tuk.g.visible=false;stopMusic();setDoor(0)}
@@ -1612,9 +1650,9 @@ let ROOM=null;
 const nameVal=()=>($('mpName').value.trim()||'Player').slice(0,14);
 function mpStatus(t,err){const e=$('mpStatus');e.textContent=t;e.classList.toggle('err',!!err)}
 try{const n=localStorage.getItem('nehan-name');if(n)$('mpName').value=n}catch(e){}
-(async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&window.Peer)ROOM=peerRoom();
+(async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&window.mqtt)ROOM=mqttRoom();else if(!ROOM&&window.Peer)ROOM=peerRoom();
   if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Press PLAY to jump into the restaurant.');if(ROOM.isPeer){$('openRow').hidden=false;$('openBox').hidden=false;ROOM.info=()=>({nm:NET.name||'Someone',n:1+Object.keys(NET.players).length,d:S.day})}}
-  else mpStatus(window.Peer===undefined&&!window.claude?'Multiplayer could not load. Check your internet connection and reload.':'Multiplayer only works when the game is opened on claude.ai by someone signed in who the game is shared with.',true)})();
+  else mpStatus(window.Peer===undefined&&window.mqtt===undefined&&!window.claude?'Multiplayer could not load. Check your internet connection and reload.':'Multiplayer only works when the game is opened on claude.ai by someone signed in who the game is shared with.',true)})();
 $('bHost').onclick=()=>{$('fHost').hidden=false;$('fJoin').hidden=true;$('hPw').focus()};
 $('bJoin').onclick=()=>{$('fJoin').hidden=false;$('fHost').hidden=true;$('jCode').focus();refreshOpen()};
 $('hOpen').onchange=()=>{$('pwRow').hidden=$('hOpen').checked};
