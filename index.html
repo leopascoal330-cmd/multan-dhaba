@@ -1687,7 +1687,10 @@ async function joinLobby2(rname,code){
 /* =============== LOOP =============== */
 let last=performance.now(),hudT=0,lastFrameAt=performance.now();
 // keep multiplayer alive when the tab is in the background (browsers pause animation frames there)
-setInterval(()=>{if(NET.role!=='solo'&&performance.now()-lastFrameAt>300){try{netTick(0.25)}catch(e){}}},250);const _lp=new THREE.Vector3();
+let bgAt=0;setInterval(()=>{const now=performance.now();if(NET.role!=='solo'&&now-lastFrameAt>300){let el=Math.min(1.5,bgAt?(now-bgAt)/1000:0.25);bgAt=now;
+  // tab in the background: keep the restaurant running for everyone else if this player is the host
+  if(NET.role==='host'&&S.mode==='play'){try{while(el>0.001){const dt=Math.min(0.05,el);el-=dt;updateStations(dt);for(let i=customers.length-1;i>=0;i--)updateCustomer(customers[i],dt);updateTuk(dt);updateFlights(dt);updateGroundFly(dt);updateFires(dt);updateDay(dt)}}catch(e){}}
+  try{netTick(0.25)}catch(e){}}else bgAt=0},250);const _lp=new THREE.Vector3();
 function frame(now){requestAnimationFrame(frame);lastFrameAt=performance.now();const dt=Math.min(0.05,(now-last)/1000);last=now;
   const sim=S.mode==='play'&&(!S.paused||NET.role!=='solo');
   if(sim&&NET.role==='client'){updatePlayer(dt);updateStations(dt);updateParts(dt);updateFlights(dt);updateDriver(dt);updateSplinters(dt);updateGroundFly(dt);updateFires(dt);updateClientCusts(dt);if(S.go){goT+=0;clientGameOver(dt)}tuk.x+=((tuk.tx||tuk.x)-tuk.x)*Math.min(1,dt*6);tuk.g.position.x=tuk.x;if((hudT+=dt)>0.25){hudT=0;updateHUD()}}
