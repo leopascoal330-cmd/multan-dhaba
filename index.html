@@ -179,10 +179,11 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
     <p class="note">Storeroom shelves → carry raw ingredients to the kitchen (or leave them on the prep counter) → cook → serve. Cans and ayran come in crates: carry them to the drinks fridge to restock it. Order more stock on the backroom PC; it arrives by tuk tuk.</p>
     <p class="note">Every evening the day's bills (the quota) come out of your cash. Can't cover it and the rest goes on a loan at 10% a day. Owe more than $500 and the bank closes you down.</p>
     <label class="set" for="pix">Pixel size <input type="range" id="pix" min="1" max="6" step="0.5" value="2"><span id="pixV">2×</span></label>
-    <div class="btns"><button class="btn" id="bStart">Play solo</button><button class="btn ghost" id="bNew" hidden>New game</button></div>
     <div class="mp">
       <div class="mpRow"><label for="mpName">Your name</label><input id="mpName" maxlength="14" placeholder="Player" autocomplete="nickname"></div>
-      <div class="btns"><button class="btn ghost" id="bHost" disabled>Host a lobby</button><button class="btn ghost" id="bJoin" disabled>Join a lobby</button></div>
+      <div class="btns"><button class="btn" id="bStart" style="font-size:22px;padding:12px 34px">PLAY</button><button class="btn ghost" id="bNew" hidden>New game</button></div>
+      <p class="note">Everyone who opens this link plays in the same restaurant.</p>
+      <div class="btns" hidden><button class="btn ghost" id="bHost" disabled>Host a lobby</button><button class="btn ghost" id="bJoin" disabled>Join a lobby</button></div>
       <form id="fHost" hidden><div class="mpRow" id="openRow" hidden><label for="hOpen">Open lobby</label><span style="display:flex;gap:8px;align-items:center;flex:1"><input id="hOpen" type="checkbox" style="flex:none;width:18px;height:18px;min-width:0;accent-color:var(--gold)"><span class="note">Anyone can join from the list, no password</span></span></div><div class="mpRow" id="pwRow"><label for="hPw">Lobby password</label><input id="hPw" type="password" minlength="3" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Create lobby</button></div></form>
       <form id="fJoin" hidden><div class="mpRow"><label for="jCode">Lobby code</label><input id="jCode" maxlength="5" autocomplete="off" style="text-transform:uppercase"></div><div class="mpRow"><label for="jPw">Password</label><input id="jPw" type="password" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Join lobby</button></div><div id="openBox" hidden><div class="mpRow" style="justify-content:space-between"><b style="color:var(--gold)">Open lobbies</b><button class="btn ghost" type="button" id="bRefresh" style="padding:4px 10px;font-size:13px">Refresh</button></div><div id="openList" class="note">Looking for open lobbies…</div></div></form>
       <p class="note" id="mpStatus">Connecting to multiplayer…</p>
@@ -1342,7 +1343,7 @@ function endDay(){S.mode='dayend';exitLock();const q=quota(S.day);const interest
     <div class="btns">${over?'<button class="btn" id="deRestart">Start over</button>':`<button class="btn" id="deNext">Open day ${S.day+1} · quota $${quota(S.day+1)}</button>`}</div>`;
   $('dayend').hidden=false;
   if(over){try{localStorage.removeItem(SAVEKEY)}catch(e){}$('deRestart').onclick=()=>location.reload()}
-  else{S.day++;save();$('deNext').onclick=()=>{startDay();lock()}}}
+  else{S.day++;save();$('deNext').onclick=()=>{startDay();lock()};if(NET.role==='host')setTimeout(()=>{if(S.mode==='dayend'&&!$('dayend').hidden)$('deNext').click()},15000)}}
 function updateDay(dt){if(S.go){updateGameOver(dt);return}S.clock+=dt;
   if(!S.closing&&S.clock>=DAY_LEN){S.closing=true;toast('Closing time — finish the last tables','gold')}
   updateChaos(dt);
@@ -1488,7 +1489,7 @@ function applySnap(g){if(!g||typeof g!=='object')return;
   const m=g.ms&&g.ms[NET.myPeer];if(NET.lastMs<0)NET.lastMs=m?m[0]:0;else if(m&&m[0]>NET.lastMs){NET.lastMs=m[0];toast(m[1],m[2])}
   const ak=g.ak&&g.ak[NET.myPeer];if(typeof ak==='number')NET.outbox=NET.outbox.filter(e=>e[0]>ak);
   if(g.m===2&&$('dayend').hidden){exitLock();const d=Array.isArray(g.ds)?g.ds:[0,0,0,0,0,S.money,S.debt,0];$('deTitle').textContent=`Day ${S.day} closed`;
-    $('deBody').innerHTML=`<div class="stat"><span>Food sales</span><span>$${d[0]|0}</span><span>Tips</span><span>$${d[1]|0}</span><span>Stock + delivery</span><span>−$${d[2]|0}</span><span>Quota</span><span>−$${d[3]|0}</span>${d[4]?`<span>Added to loan</span><span style="color:var(--bad)">$${d[4]|0}</span>`:''}<span class="t">Cash</span><span class="t" style="color:var(--gold)">$${d[5]|0}</span><span>Loan</span><span>$${d[6]|0}</span></div><p class="note">${d[7]?'The bank closed the restaurant.':'Waiting for the host to open the next day…'}</p>`;$('dayend').hidden=false}
+    $('deBody').innerHTML=`<div class="stat"><span>Food sales</span><span>$${d[0]|0}</span><span>Tips</span><span>$${d[1]|0}</span><span>Stock + delivery</span><span>−$${d[2]|0}</span><span>Quota</span><span>−$${d[3]|0}</span>${d[4]?`<span>Added to loan</span><span style="color:var(--bad)">$${d[4]|0}</span>`:''}<span class="t">Cash</span><span class="t" style="color:var(--gold)">$${d[5]|0}</span><span>Loan</span><span>$${d[6]|0}</span></div><p class="note">${d[7]?'The bank closed the restaurant.':'The next day starts in a few seconds…'}</p>`;$('dayend').hidden=false}
   else if(g.m===1&&!$('dayend').hidden){$('dayend').hidden=true;toast(`Day ${S.day} — doors open`,'gold')}
   updateHUD()}
 function applyCusts(list){const seen=new Set();
@@ -1530,7 +1531,7 @@ function netTick(dt){if(NET.role==='solo'||!NET.nroom)return;NET.sendT-=dt;const
     if(NET.sendT<=0){NET.sendT=0.1;const sn=makeSnap();while(JSON.stringify(sn).length>3500&&sn.gr.length)sn.gr.shift();r.presence({role:'h',nm:NET.name,p:myP(),kd:P.down>0?1:0,g:sn}).catch(()=>{})}}
   else{const host=peers.find(p=>!p.sameTab&&p.presence&&p.presence.role==='h');
     if(host){NET.hostSeen=performance.now();if(host.presence.g&&host.presence.g!==NET.lastG){NET.lastG=host.presence.g;applySnap(NET.lastG)}}
-    else if(performance.now()-NET.hostSeen>9000){lobbyClosed('The host left, so the lobby closed.');return}
+    else if(performance.now()-NET.hostSeen>4000){migrateHost();return}
     if(NET.sendT<=0){NET.sendT=0.066;r.presence({role:'c',nm:NET.name,p:myP(),kd:P.down>0?1:0,q:NET.outbox}).catch(()=>{})}}
   if((badgeT-=dt)<=0){badgeT=0.5;const names=peers.filter(p=>p.presence&&p.presence.role).map(p=>String(p.presence.nm||'Player').slice(0,16)+(p.sameTab?' (you)':''));const b=$('lobby');b.hidden=false;
     b.innerHTML='';const t=document.createElement('div');t.innerHTML=`Lobby <b></b> · ${names.length} player${names.length===1?'':'s'}`;t.querySelector('b').textContent=NET.code==='open'?'OPEN':NET.code.toUpperCase();b.appendChild(t);const l=document.createElement('div');l.style.color='var(--dim)';l.textContent=names.join(', ');b.appendChild(l)}}
@@ -1547,14 +1548,14 @@ function peerRoom(){const R={isPeer:true,info:()=>({nm:'Someone',n:1,d:1})};
     presence:async patch=>{const pres=state.pres;for(const k in patch){if(patch[k]===null)delete pres[k];else pres[k]=patch[k]}
       if(state.host){const all={};all[state.me]=pres;for(const [id,c] of state.conns)if(c.ok&&c.p)all[id]=c.p;const msg={t:'all',a:all};for(const [,c] of state.conns)if(c.ok&&c.conn.open){try{c.conn.send(msg)}catch(e){}}}
       else if(state.hostConn&&state.hostConn.open){try{state.hostConn.send({t:'p',p:pres})}catch(e){}}},
-    peers:()=>{const out=[{peer:state.me,sameTab:true,isMe:true,presence:state.pres}];if(state.host){for(const [id,c] of state.conns)if(c.ok&&c.p)out.push({peer:id,sameTab:false,isMe:false,presence:c.p})}else{for(const id in state.others)if(id!==state.me&&state.others[id])out.push({peer:id,sameTab:false,isMe:false,presence:state.others[id]})}return out},
+    peers:()=>{const out=[{peer:state.me,sameTab:true,isMe:true,presence:state.pres}];if(state.host){for(const [id,c] of state.conns)if(c.ok&&c.p&&performance.now()-(c.last||0)<8000)out.push({peer:id,sameTab:false,isMe:false,presence:c.p})}else if(performance.now()-(state.lastMsg||0)<4500){for(const id in state.others)if(id!==state.me&&state.others[id])out.push({peer:id,sameTab:false,isMe:false,presence:state.others[id]})}return out},
     leave:async()=>{try{state.peer&&state.peer.destroy()}catch(e){}},connected:()=>!!state.peer&&!state.peer.disconnected}}
   function serve(state){const peer=state.peer;peer.on('disconnected',()=>{try{if(!peer.destroyed)peer.reconnect()}catch(e){}});
     peer.on('connection',conn=>{const c={conn,ok:false,p:null};state.conns.set(conn.peer,c);
       conn.on('data',d=>{if(!d||typeof d!=='object')return;
         if(d.t==='info'){try{const inf=R.info();conn.send({t:'info',nm:inf.nm,n:inf.n,d:inf.d,full:[...state.conns.values()].filter(x=>x.ok).length>=8})}catch(e){}return}
         if(d.t==='hello'){if(d.h!==state.tok||[...state.conns.values()].filter(x=>x.ok).length>=8){try{conn.send({t:'bad',why:d.h!==state.tok?'pw':'full'})}catch(e){}setTimeout(()=>{try{conn.close()}catch(e){}},300);return}c.ok=true;try{conn.send({t:'ok'})}catch(e){}}
-        else if(d.t==='p'&&c.ok&&d.p&&typeof d.p==='object'&&!Array.isArray(d.p)){try{if(JSON.stringify(d.p).length<8000)c.p=d.p}catch(e){}}});
+        else if(d.t==='p'&&c.ok&&d.p&&typeof d.p==='object'&&!Array.isArray(d.p)){try{if(JSON.stringify(d.p).length<8000){c.p=d.p;c.last=performance.now()}}catch(e){}}});
       const drop=()=>state.conns.delete(conn.peer);conn.on('close',drop);conn.on('error',drop)})}
   const newState=(hid,tok,host)=>({hid,tok,host,me:null,peer:null,hostConn:null,others:{},conns:new Map(),pres:{}});
   function hostAt(hid,tok){return new Promise((res,rej)=>{const st=newState(hid,tok,true);st.peer=new Peer(hid,PEER_CFG);let ok=false;
@@ -1567,7 +1568,7 @@ function peerRoom(){const R={isPeer:true,info:()=>({nm:'Someone',n:1,d:1})};
     st.peer.on('open',id=>{st.me=id;const hc=st.hostConn=st.peer.connect(hid,{reliable:true,serialization:'json'});
       hc.on('open',()=>{try{hc.send({t:'hello',h:tok})}catch(e){}});
       hc.on('error',e=>console.warn('conn error',e));
-      hc.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='bad')fail(d.why==='full'?'full':'bad_pw');else if(d.t==='ok'&&!done){done=true;clearTimeout(to);res(api(st))}else if(d.t==='all'&&d.a&&typeof d.a==='object')st.others=d.a});
+      hc.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='bad')fail(d.why==='full'?'full':'bad_pw');else if(d.t==='ok'&&!done){done=true;clearTimeout(to);res(api(st))}else if(d.t==='all'&&d.a&&typeof d.a==='object'){st.others=d.a;st.lastMsg=performance.now()}});
       hc.on('close',()=>{st.others={}})})})}
   R.join=(name,asHost)=>{const m=/^dhaba-([a-z0-9]+)-([0-9a-z]+)$/.exec(name);if(!m)return Promise.reject({code:'net'});const o=/^o(\d+)$/.exec(m[1]);const hid=o?openId(+o[1]):'multan-dhaba-'+m[1];return asHost?hostAt(hid,m[2]):joinAt(hid,m[2])};
   R.hostOpen=async()=>{for(let i=0;i<OPEN_SLOTS;i++){try{const a=await hostAt(openId(i),'open');a.slot=i;return a}catch(e){if(e.code!=='taken')throw e}}throw {code:'full'}};
@@ -1577,13 +1578,42 @@ function peerRoom(){const R={isPeer:true,info:()=>({nm:'Someone',n:1,d:1})};
     p.on('open',()=>{for(let i=0;i<OPEN_SLOTS;i++){const c=p.connect(openId(i),{reliable:true,serialization:'json'});c.on('open',()=>{try{c.send({t:'info'})}catch(e){}});
       c.on('data',d=>{if(d&&d.t==='info'&&!found.some(f=>f.slot===i)){found.push({slot:i,nm:String(d.nm||'Someone').slice(0,16),n:d.n|0,d:d.d|0,full:!!d.full});try{c.close()}catch(e){}if(misses+found.length>=OPEN_SLOTS)fin()}})}})});
   return R}
+// ===== ONE SHARED WORLD: first player in runs the restaurant, everyone else joins it =====
+const WORLD='dhaba-world-world';addEventListener('beforeunload',()=>{try{NET.nroom&&NET.nroom.leave()}catch(e){}});const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function joinWorld(){if(joining)return;joining=true;saveName();NET.name=nameVal();initAudio();if(AC&&AC.state==='suspended')AC.resume();
+  if(!ROOM){joining=false;startDay();lock();return}
+  $('bStart').disabled=true;mpStatus('Joining the restaurant…');
+  try{if(ROOM.isPeer){let r=null;
+      try{r=await ROOM.join(WORLD,false)}catch(e){if(e&&e.code==='no_lobby'){try{const h=await ROOM.join(WORLD,true);becomeHost(h,true);return}catch(e2){if(e2&&e2.code==='taken'){r=await ROOM.join(WORLD,false)}else throw e2}}else throw e}
+      if(!(await enterAsClient(r))){const h=await ROOM.join(WORLD,true);becomeHost(h,true)}}
+    else{const r=await ROOM.join(WORLD);const t0=performance.now();while(performance.now()-t0<3000&&!hostIn(r))await sleep(200);if(hostIn(r))await enterAsClient(r);else becomeHost(r,true)}}
+  catch(e){mpStatus('Could not connect ('+((e&&(e.type||e.code))||'network')+'). Press PLAY to try again. School or work Wi-Fi sometimes blocks this.',true)}
+  finally{joining=false;$('bStart').disabled=false}}
+const hostIn=r=>{try{return r.peers().some(p=>!p.sameTab&&p.presence&&p.presence.role==='h'&&p.presence.g)}catch(e){return false}};
+function becomeHost(api,fresh){NET.nroom=api;NET.role='host';NET.code='world';NET.myPeer=null;NET.players={};lock();if(fresh){startDay();toast('You\'re the first one here — you run the restaurant until someone else takes over','gold')}}
+async function enterAsClient(r){const t0=performance.now();while(performance.now()-t0<8000&&!hostIn(r))await sleep(250);if(!hostIn(r)){try{r.leave()}catch(e){}return false}
+  NET.nroom=r;NET.role='client';NET.code='world';NET.myPeer=null;NET.hostSeen=performance.now();NET.lastG=null;
+  P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();lock();toast('You joined the restaurant — click the game to look around','gold');return true}
+// the host left: hand the restaurant to someone else, keeping the shared day, money, menu and stock
+function migrateHost(){if(NET.migrating)return;NET.migrating=true;
+  if(!ROOM.isPeer){let ps=[];try{ps=NET.nroom.peers()}catch(e){}const cs=ps.filter(p=>p.presence&&p.presence.role==='c').map(p=>p.peer).sort();if(cs[0]&&cs[0]===NET.myPeer)promoteToHost(NET.nroom);NET.migrating=false;NET.hostSeen=performance.now();return}
+  const old=NET.nroom;NET.nroom=null;try{old&&old.leave()}catch(e){}
+  (async()=>{await sleep(200+Math.random()*1600);try{const h=await ROOM.join(WORLD,true);promoteToHost(h)}
+    catch(e){try{const r=await ROOM.join(WORLD,false);NET.nroom=r;NET.myPeer=null;NET.lastG=null;NET.hostSeen=performance.now();toast('The host left — reconnected to the new one','')}
+      catch(e2){toast('Lost the connection — retrying…','bad');NET.migrating=false;setTimeout(migrateHost,3000);return}}
+    NET.migrating=false})()}
+function promoteToHost(api){for(const [id,c] of NET.ccust){scene.remove(c.mesh);c.el.remove();unreg(c);c.plates.forEach(m=>scene.remove(m))}NET.ccust.clear();
+  NET.players={};NET.lastG=null;NET.myPeer=null;NET.nroom=api;NET.role='host';spawnT=3;
+  if(tuk.state!=='idle'){tuk.state='idle';tuk.g.visible=false;stopMusic();setDoor(0)}
+  if(S.mode==='dayend'||!$('dayend').hidden){$('dayend').hidden=true;startDay()}else S.mode='play';
+  toast('The host left — you\'re running the restaurant now','gold')}
 // lobby UI
 let ROOM=null;
 const nameVal=()=>($('mpName').value.trim()||'Player').slice(0,14);
 function mpStatus(t,err){const e=$('mpStatus');e.textContent=t;e.classList.toggle('err',!!err)}
 try{const n=localStorage.getItem('nehan-name');if(n)$('mpName').value=n}catch(e){}
 (async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&window.Peer)ROOM=peerRoom();
-  if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Host a lobby and give your friends the code and password.');if(ROOM.isPeer){$('openRow').hidden=false;$('openBox').hidden=false;ROOM.info=()=>({nm:NET.name||'Someone',n:1+Object.keys(NET.players).length,d:S.day})}}
+  if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Press PLAY to jump into the restaurant.');if(ROOM.isPeer){$('openRow').hidden=false;$('openBox').hidden=false;ROOM.info=()=>({nm:NET.name||'Someone',n:1+Object.keys(NET.players).length,d:S.day})}}
   else mpStatus(window.Peer===undefined&&!window.claude?'Multiplayer could not load. Check your internet connection and reload.':'Multiplayer only works when the game is opened on claude.ai by someone signed in who the game is shared with.',true)})();
 $('bHost').onclick=()=>{$('fHost').hidden=false;$('fJoin').hidden=true;$('hPw').focus()};
 $('bJoin').onclick=()=>{$('fJoin').hidden=false;$('fHost').hidden=true;$('jCode').focus();refreshOpen()};
@@ -1641,8 +1671,8 @@ function frame(now){requestAnimationFrame(frame);lastFrameAt=performance.now();c
   renderer.render(scene,camera);if(fp.visible&&S.mode!=='title'){renderer.autoClear=false;renderer.clearDepth();renderer.render(fpScene,camera);renderer.autoClear=true}}
 
 /* =============== BOOT =============== */
-if(load()){$('bStart').textContent=`Play solo · day ${S.day}`;$('bNew').hidden=false}
-$('bStart').onclick=()=>{saveName();NET.name=nameVal();initAudio();if(AC&&AC.state==='suspended')AC.resume();startDay();lock()};
+load();
+$('bStart').onclick=()=>{joinWorld()};
 $('bNew').onclick=()=>{try{localStorage.removeItem(SAVEKEY)}catch(e){}location.reload()};
 scene.traverse(o=>{if(o.isPointLight&&!LANTERNS.includes(o)&&o!==fireLight&&o!==alarmLight)ALL_PL.push([o,o.intensity])});
 setDoor(0);refreshMenuSign();refreshShelves();try{renderer.compile(scene,camera);renderer.compile(fpScene,camera)}catch(e){}refreshHands();refreshPrep();refreshFridge();updateHUD();
