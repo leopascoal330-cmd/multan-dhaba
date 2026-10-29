@@ -360,8 +360,8 @@ function plight(c,i,d,x,y,z){const l=new THREE.PointLight(c,i,d,1.5);l.position.
 plight(0xfff4e6,0.75,10,-6.5,2.7,-4.5);plight(0xfff4e6,0.55,9,-1.5,2.7,-4.5);plight(0xf2f0ea,0.6,10,6,2.7,-4);
 
 const matCache={};
-function M(c){const k='l'+c;return matCache[k]||(matCache[k]=new THREE.MeshLambertMaterial({color:c,flatShading:true}))}
-function MD(c){const k='d'+c;return matCache[k]||(matCache[k]=new THREE.MeshLambertMaterial({color:c,flatShading:true,side:THREE.DoubleSide}))}
+function M(c){const k='l'+c;return matCache[k]||(matCache[k]=new THREE.MeshLambertMaterial({color:c}))}
+function MD(c){const k='d'+c;return matCache[k]||(matCache[k]=new THREE.MeshLambertMaterial({color:c,side:THREE.DoubleSide}))}
 function B(c){const k='b'+c;return matCache[k]||(matCache[k]=new THREE.MeshBasicMaterial({color:c}))}
 const GLASS=new THREE.MeshLambertMaterial({color:'#dff3f5',transparent:true,opacity:0.4,side:THREE.DoubleSide});
 const mm=c=>c&&c.isMaterial?c:M(c);
@@ -1070,7 +1070,7 @@ function vessel(st,k){const g=new THREE.Group();let top;
 function haveFor(k){const need=COOK[k].needs.slice();const pool=S.hands.map(h=>h.k).concat(S.prep.map(h=>h.k));return need.every(n=>{const i=pool.indexOf(n);if(i<0)return false;pool.splice(i,1);return true})}
 function takeIngredients(k){COOK[k].needs.forEach(n=>{let i=S.hands.findIndex(h=>h.k===n);if(i>=0){S.hands.splice(i,1);return}i=S.prep.findIndex(h=>h.k===n);if(i>=0)S.prep.splice(i,1)});refreshHands();refreshPrep()}
 function startCook(st,slot,k){takeIngredients(k);startCookVisual(st,slot,k)}
-function startCookVisual(st,slot,k){slot.glug=false;slot.burntT=0;slot.state='cooking';slot.recipe=k;slot.t=0;slot.pot=vessel(st,k);{const tp=slot.pot.userData.top;if(!tp.userData.keep)tp.material=new THREE.MeshLambertMaterial({color:COOK[k].raw,flatShading:true})}slot.pot.position.copy(slot.pos);scene.add(slot.pot);
+function startCookVisual(st,slot,k){slot.glug=false;slot.burntT=0;slot.state='cooking';slot.recipe=k;slot.t=0;slot.pot=vessel(st,k);{const tp=slot.pot.userData.top;if(!tp.userData.keep)tp.material=new THREE.MeshLambertMaterial({color:COOK[k].raw})}slot.pot.position.copy(slot.pos);scene.add(slot.pot);
   slot.el=document.createElement('div');slot.el.className='lab';$('labels').appendChild(slot.el);slot.puffT=0}
 function clearSlot(s){if(s.pot)scene.remove(s.pot);if(s.el)s.el.remove();s.pot=s.el=null;s.state='empty';s.recipe=null}
 const _c1=new THREE.Color(),_c2=new THREE.Color();
@@ -1617,8 +1617,10 @@ async function joinLobby2(rname,code){
   P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();toast('Joined the lobby — click the game to look around','gold')}
 
 /* =============== LOOP =============== */
-let last=performance.now(),hudT=0;const _lp=new THREE.Vector3();
-function frame(now){requestAnimationFrame(frame);const dt=Math.min(0.05,(now-last)/1000);last=now;
+let last=performance.now(),hudT=0,lastFrameAt=performance.now();
+// keep multiplayer alive when the tab is in the background (browsers pause animation frames there)
+setInterval(()=>{if(NET.role!=='solo'&&performance.now()-lastFrameAt>300){try{netTick(0.25)}catch(e){}}},250);const _lp=new THREE.Vector3();
+function frame(now){requestAnimationFrame(frame);lastFrameAt=performance.now();const dt=Math.min(0.05,(now-last)/1000);last=now;
   const sim=S.mode==='play'&&(!S.paused||NET.role!=='solo');
   if(sim&&NET.role==='client'){updatePlayer(dt);updateStations(dt);updateParts(dt);updateFlights(dt);updateDriver(dt);updateSplinters(dt);updateGroundFly(dt);updateFires(dt);updateClientCusts(dt);if(S.go){goT+=0;clientGameOver(dt)}tuk.x+=((tuk.tx||tuk.x)-tuk.x)*Math.min(1,dt*6);tuk.g.position.x=tuk.x;if((hudT+=dt)>0.25){hudT=0;updateHUD()}}
   else if(sim){updatePlayer(dt);updateStations(dt);for(let i=customers.length-1;i>=0;i--)updateCustomer(customers[i],dt);updateTuk(dt);updateFlights(dt);updateDriver(dt);updateSplinters(dt);updateGroundFly(dt);updateFires(dt);updateParts(dt);updateDay(dt);if((hudT+=dt)>0.25){hudT=0;updateHUD()}}
