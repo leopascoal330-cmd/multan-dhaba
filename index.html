@@ -132,6 +132,9 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
 .mpRow input{flex:1;min-width:140px;font:inherit;font-size:15px;background:#120b08;color:var(--ink);border:2px solid var(--line);padding:6px 8px}
 .mpRow input:focus{outline:none;border-color:var(--gold)}
 #mpStatus{min-height:1.2em}
+#openList{display:flex;flex-direction:column;gap:6px}
+.lob{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel2);border:2px solid var(--line);padding:6px 10px;font-size:14px;color:var(--ink)}
+.lob .m{color:var(--dim);font-size:12px}
 #mpStatus.err{color:var(--bad)}
 @media (max-width:640px){.row{grid-template-columns:14px 1fr 44px auto}.row .hide{display:none}#help{display:none}.ts{width:80px;font-size:11px}}
 @media (prefers-reduced-motion:reduce){.toast,.slotlab.warn,#banner{animation:none}}
@@ -180,8 +183,8 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
     <div class="mp">
       <div class="mpRow"><label for="mpName">Your name</label><input id="mpName" maxlength="14" placeholder="Player" autocomplete="nickname"></div>
       <div class="btns"><button class="btn ghost" id="bHost" disabled>Host a lobby</button><button class="btn ghost" id="bJoin" disabled>Join a lobby</button></div>
-      <form id="fHost" hidden><div class="mpRow"><label for="hPw">Lobby password</label><input id="hPw" type="password" minlength="3" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Create lobby</button></div></form>
-      <form id="fJoin" hidden><div class="mpRow"><label for="jCode">Lobby code</label><input id="jCode" maxlength="5" autocomplete="off" style="text-transform:uppercase"></div><div class="mpRow"><label for="jPw">Password</label><input id="jPw" type="password" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Join lobby</button></div></form>
+      <form id="fHost" hidden><div class="mpRow" id="openRow" hidden><label for="hOpen">Open lobby</label><span style="display:flex;gap:8px;align-items:center;flex:1"><input id="hOpen" type="checkbox" style="flex:none;width:18px;height:18px;min-width:0;accent-color:var(--gold)"><span class="note">Anyone can join from the list, no password</span></span></div><div class="mpRow" id="pwRow"><label for="hPw">Lobby password</label><input id="hPw" type="password" minlength="3" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Create lobby</button></div></form>
+      <form id="fJoin" hidden><div class="mpRow"><label for="jCode">Lobby code</label><input id="jCode" maxlength="5" autocomplete="off" style="text-transform:uppercase"></div><div class="mpRow"><label for="jPw">Password</label><input id="jPw" type="password" maxlength="24" autocomplete="off"></div><div class="btns"><button class="btn" type="submit">Join lobby</button></div><div id="openBox" hidden><div class="mpRow" style="justify-content:space-between"><b style="color:var(--gold)">Open lobbies</b><button class="btn ghost" type="button" id="bRefresh" style="padding:4px 10px;font-size:13px">Refresh</button></div><div id="openList" class="note">Looking for open lobbies…</div></div></form>
       <p class="note" id="mpStatus">Connecting to multiplayer…</p>
     </div>
     <p class="note">Needs a keyboard and mouse. Sound on for the tuk tuk.</p>
@@ -1530,56 +1533,88 @@ function netTick(dt){if(NET.role==='solo'||!NET.nroom)return;NET.sendT-=dt;const
     else if(performance.now()-NET.hostSeen>9000){lobbyClosed('The host left, so the lobby closed.');return}
     if(NET.sendT<=0){NET.sendT=0.066;r.presence({role:'c',nm:NET.name,p:myP(),kd:P.down>0?1:0,q:NET.outbox}).catch(()=>{})}}
   if((badgeT-=dt)<=0){badgeT=0.5;const names=peers.filter(p=>p.presence&&p.presence.role).map(p=>String(p.presence.nm||'Player').slice(0,16)+(p.sameTab?' (you)':''));const b=$('lobby');b.hidden=false;
-    b.innerHTML='';const t=document.createElement('div');t.innerHTML=`Lobby <b></b> · ${names.length} player${names.length===1?'':'s'}`;t.querySelector('b').textContent=NET.code.toUpperCase();b.appendChild(t);const l=document.createElement('div');l.style.color='var(--dim)';l.textContent=names.join(', ');b.appendChild(l)}}
+    b.innerHTML='';const t=document.createElement('div');t.innerHTML=`Lobby <b></b> · ${names.length} player${names.length===1?'':'s'}`;t.querySelector('b').textContent=NET.code==='open'?'OPEN':NET.code.toUpperCase();b.appendChild(t);const l=document.createElement('div');l.style.color='var(--dim)';l.textContent=names.join(', ');b.appendChild(l)}}
 function lobbyClosed(msg){if(NET.nroom)NET.nroom.leave().catch(()=>{});NET.nroom=null;NET.role='solo';S.mode='dayend';exitLock();stopMusic();$('deTitle').textContent='Lobby closed';$('deBody').innerHTML='';
   const p=document.createElement('p');p.className='note';p.textContent=msg;const b=document.createElement('div');b.className='btns';const bt=document.createElement('button');bt.className='btn';bt.textContent='Back to menu';bt.onclick=()=>location.reload();b.appendChild(bt);$('deBody').append(p,b);$('dayend').hidden=false}
 // Peer-to-peer lobby for the standalone web build (browser to browser via PeerJS).
 // Same interface the game uses for the claude.ai room: join(name) -> {presence, peers, leave}.
-function peerRoom(){return{isPeer:true,join:(name,asHost)=>new Promise((res,rej)=>{
-  const m=/^dhaba-([a-z0-9]+)-([0-9a-f]+)$/.exec(name);if(!m){rej({code:'net'});return}const tok=m[2],hid='multan-dhaba-'+m[1];
-  let me=null,peer=null,hostConn=null,others={};const conns=new Map(),pres={};
-  const api={name,
-    presence:async patch=>{for(const k in patch){if(patch[k]===null)delete pres[k];else pres[k]=patch[k]}
-      if(asHost){const all={};all[me]=pres;for(const [id,c] of conns)if(c.ok&&c.p)all[id]=c.p;const msg={t:'all',a:all};for(const [,c] of conns)if(c.ok&&c.conn.open){try{c.conn.send(msg)}catch(e){}}}
-      else if(hostConn&&hostConn.open){try{hostConn.send({t:'p',p:pres})}catch(e){}}},
-    peers:()=>{const out=[{peer:me,sameTab:true,isMe:true,presence:pres}];if(asHost){for(const [id,c] of conns)if(c.ok&&c.p)out.push({peer:id,sameTab:false,isMe:false,presence:c.p})}else{for(const id in others)if(id!==me&&others[id])out.push({peer:id,sameTab:false,isMe:false,presence:others[id]})}return out},
-    leave:async()=>{try{peer&&peer.destroy()}catch(e){}},connected:()=>!!peer&&!peer.disconnected};
-  if(asHost){peer=new Peer(hid,{debug:0});peer.on('open',id=>{me=id;res(api)});peer.on('error',e=>{if(!me)rej({code:e&&e.type==='unavailable-id'?'taken':'net'})});
-    peer.on('disconnected',()=>{try{peer.reconnect()}catch(e){}});
-    peer.on('connection',conn=>{const c={conn,ok:false,p:null};conns.set(conn.peer,c);
-      conn.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='hello'){if(d.h!==tok||conns.size>8){try{conn.send({t:'bad'})}catch(e){}setTimeout(()=>{try{conn.close()}catch(e){}},300);return}c.ok=true;try{conn.send({t:'ok'})}catch(e){}}
+// Peer-to-peer lobbies for the web build (browser to browser via PeerJS + public STUN/TURN relays).
+const PEER_CFG={debug:1,config:{iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},{urls:'stun:global.stun.twilio.com:3478'},
+  {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},{urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}]}};
+const OPEN_SLOTS=12,openId=i=>'multan-dhaba-open-'+i;
+function peerRoom(){const R={isPeer:true,info:()=>({nm:'Someone',n:1,d:1})};
+  function api(state){return{name:state.hid,slot:state.slot,
+    presence:async patch=>{const pres=state.pres;for(const k in patch){if(patch[k]===null)delete pres[k];else pres[k]=patch[k]}
+      if(state.host){const all={};all[state.me]=pres;for(const [id,c] of state.conns)if(c.ok&&c.p)all[id]=c.p;const msg={t:'all',a:all};for(const [,c] of state.conns)if(c.ok&&c.conn.open){try{c.conn.send(msg)}catch(e){}}}
+      else if(state.hostConn&&state.hostConn.open){try{state.hostConn.send({t:'p',p:pres})}catch(e){}}},
+    peers:()=>{const out=[{peer:state.me,sameTab:true,isMe:true,presence:state.pres}];if(state.host){for(const [id,c] of state.conns)if(c.ok&&c.p)out.push({peer:id,sameTab:false,isMe:false,presence:c.p})}else{for(const id in state.others)if(id!==state.me&&state.others[id])out.push({peer:id,sameTab:false,isMe:false,presence:state.others[id]})}return out},
+    leave:async()=>{try{state.peer&&state.peer.destroy()}catch(e){}},connected:()=>!!state.peer&&!state.peer.disconnected}}
+  function serve(state){const peer=state.peer;peer.on('disconnected',()=>{try{if(!peer.destroyed)peer.reconnect()}catch(e){}});
+    peer.on('connection',conn=>{const c={conn,ok:false,p:null};state.conns.set(conn.peer,c);
+      conn.on('data',d=>{if(!d||typeof d!=='object')return;
+        if(d.t==='info'){try{const inf=R.info();conn.send({t:'info',nm:inf.nm,n:inf.n,d:inf.d,full:[...state.conns.values()].filter(x=>x.ok).length>=8})}catch(e){}return}
+        if(d.t==='hello'){if(d.h!==state.tok||[...state.conns.values()].filter(x=>x.ok).length>=8){try{conn.send({t:'bad',why:d.h!==state.tok?'pw':'full'})}catch(e){}setTimeout(()=>{try{conn.close()}catch(e){}},300);return}c.ok=true;try{conn.send({t:'ok'})}catch(e){}}
         else if(d.t==='p'&&c.ok&&d.p&&typeof d.p==='object'&&!Array.isArray(d.p)){try{if(JSON.stringify(d.p).length<8000)c.p=d.p}catch(e){}}});
-      const drop=()=>conns.delete(conn.peer);conn.on('close',drop);conn.on('error',drop)})}
-  else{peer=new Peer({debug:0});let done=false;const fail=c=>{if(done)return;done=true;try{peer.destroy()}catch(e){}rej({code:c})};setTimeout(()=>fail('no_lobby'),12000);
-    peer.on('error',e=>fail(e&&e.type==='peer-unavailable'?'no_lobby':'net'));
-    peer.on('open',id=>{me=id;hostConn=peer.connect(hid,{reliable:true,serialization:'json'});
-      hostConn.on('open',()=>{try{hostConn.send({t:'hello',h:tok})}catch(e){}});
-      hostConn.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='bad')fail('bad_pw');else if(d.t==='ok'&&!done){done=true;res(api)}else if(d.t==='all'&&d.a&&typeof d.a==='object')others=d.a});
-      hostConn.on('close',()=>{others={}})})}})}}
+      const drop=()=>state.conns.delete(conn.peer);conn.on('close',drop);conn.on('error',drop)})}
+  const newState=(hid,tok,host)=>({hid,tok,host,me:null,peer:null,hostConn:null,others:{},conns:new Map(),pres:{}});
+  function hostAt(hid,tok){return new Promise((res,rej)=>{const st=newState(hid,tok,true);st.peer=new Peer(hid,PEER_CFG);let ok=false;
+    const to=setTimeout(()=>{if(!ok){try{st.peer.destroy()}catch(e){}rej({code:'net'})}},15000);
+    st.peer.on('open',id=>{ok=true;clearTimeout(to);st.me=id;serve(st);res(api(st))});
+    st.peer.on('error',e=>{if(!ok){clearTimeout(to);try{st.peer.destroy()}catch(x){}rej({code:e&&e.type==='unavailable-id'?'taken':'net',type:e&&e.type})}else console.warn('peer error',e&&e.type)})})}
+  function joinAt(hid,tok){return new Promise((res,rej)=>{const st=newState(hid,tok,false);st.peer=new Peer(PEER_CFG);let done=false;
+    const fail=(c,t)=>{if(done)return;done=true;try{st.peer.destroy()}catch(e){}rej({code:c,type:t})};const to=setTimeout(()=>fail(st.hostConn&&st.hostConn.open?'net':'no_lobby','timeout'),20000);
+    st.peer.on('error',e=>{console.warn('peer error',e&&e.type);if(!done)fail(e&&e.type==='peer-unavailable'?'no_lobby':'net',e&&e.type)});
+    st.peer.on('open',id=>{st.me=id;const hc=st.hostConn=st.peer.connect(hid,{reliable:true,serialization:'json'});
+      hc.on('open',()=>{try{hc.send({t:'hello',h:tok})}catch(e){}});
+      hc.on('error',e=>console.warn('conn error',e));
+      hc.on('data',d=>{if(!d||typeof d!=='object')return;if(d.t==='bad')fail(d.why==='full'?'full':'bad_pw');else if(d.t==='ok'&&!done){done=true;clearTimeout(to);res(api(st))}else if(d.t==='all'&&d.a&&typeof d.a==='object')st.others=d.a});
+      hc.on('close',()=>{st.others={}})})})}
+  R.join=(name,asHost)=>{const m=/^dhaba-([a-z0-9]+)-([0-9a-z]+)$/.exec(name);if(!m)return Promise.reject({code:'net'});const o=/^o(\d+)$/.exec(m[1]);const hid=o?openId(+o[1]):'multan-dhaba-'+m[1];return asHost?hostAt(hid,m[2]):joinAt(hid,m[2])};
+  R.hostOpen=async()=>{for(let i=0;i<OPEN_SLOTS;i++){try{const a=await hostAt(openId(i),'open');a.slot=i;return a}catch(e){if(e.code!=='taken')throw e}}throw {code:'full'}};
+  R.listOpen=()=>new Promise(res=>{const p=new Peer(PEER_CFG);const found=[];let misses=0,done=false;
+    const fin=()=>{if(done)return;done=true;try{p.destroy()}catch(e){}res(found.sort((a,b)=>a.slot-b.slot))};setTimeout(fin,7000);
+    p.on('error',e=>{if(e&&e.type==='peer-unavailable'){misses++;if(misses+found.length>=OPEN_SLOTS)fin()}});
+    p.on('open',()=>{for(let i=0;i<OPEN_SLOTS;i++){const c=p.connect(openId(i),{reliable:true,serialization:'json'});c.on('open',()=>{try{c.send({t:'info'})}catch(e){}});
+      c.on('data',d=>{if(d&&d.t==='info'&&!found.some(f=>f.slot===i)){found.push({slot:i,nm:String(d.nm||'Someone').slice(0,16),n:d.n|0,d:d.d|0,full:!!d.full});try{c.close()}catch(e){}if(misses+found.length>=OPEN_SLOTS)fin()}})}})});
+  return R}
 // lobby UI
 let ROOM=null;
 const nameVal=()=>($('mpName').value.trim()||'Player').slice(0,14);
 function mpStatus(t,err){const e=$('mpStatus');e.textContent=t;e.classList.toggle('err',!!err)}
 try{const n=localStorage.getItem('nehan-name');if(n)$('mpName').value=n}catch(e){}
 (async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&window.Peer)ROOM=peerRoom();
-  if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Host a lobby and give your friends the code and password.')}
+  if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Host a lobby and give your friends the code and password.');if(ROOM.isPeer){$('openRow').hidden=false;$('openBox').hidden=false;ROOM.info=()=>({nm:NET.name||'Someone',n:1+Object.keys(NET.players).length,d:S.day})}}
   else mpStatus(window.Peer===undefined&&!window.claude?'Multiplayer could not load. Check your internet connection and reload.':'Multiplayer only works when the game is opened on claude.ai by someone signed in who the game is shared with.',true)})();
 $('bHost').onclick=()=>{$('fHost').hidden=false;$('fJoin').hidden=true;$('hPw').focus()};
-$('bJoin').onclick=()=>{$('fJoin').hidden=false;$('fHost').hidden=true;$('jCode').focus()};
+$('bJoin').onclick=()=>{$('fJoin').hidden=false;$('fHost').hidden=true;$('jCode').focus();refreshOpen()};
+$('hOpen').onchange=()=>{$('pwRow').hidden=$('hOpen').checked};
+let listing=false;
+async function refreshOpen(){if(!ROOM||!ROOM.isPeer||listing)return;listing=true;const L=$('openList');L.textContent='Looking for open lobbies…';
+  let list=[];try{list=await ROOM.listOpen()}catch(e){}listing=false;L.innerHTML='';
+  if(!list.length){L.textContent='No open lobbies right now. Host one with “Open lobby” ticked.';return}
+  list.forEach(o=>{const row=document.createElement('div');row.className='lob';const info=document.createElement('span');const nm=document.createElement('span');nm.textContent=o.nm+'’s dhaba';const m=document.createElement('span');m.className='m';m.textContent=` · ${o.n} player${o.n===1?'':'s'} · day ${o.d}`;info.append(nm,m);
+    const b=document.createElement('button');b.className='buy';b.type='button';b.textContent=o.full?'Full':'Join';b.disabled=o.full;b.onclick=()=>joinLobby('dhaba-o'+o.slot+'-open','OPEN');row.append(info,b);L.appendChild(row)})}
+$('bRefresh').onclick=refreshOpen;
 function saveName(){try{localStorage.setItem('nehan-name',nameVal())}catch(e){}}
-$('fHost').addEventListener('submit',async e=>{e.preventDefault();const pw=$('hPw').value;if(pw.length<3){mpStatus('Use a password of at least 3 characters.',true);return}
+$('fHost').addEventListener('submit',async e=>{e.preventDefault();const isOpen=ROOM&&ROOM.isPeer&&$('hOpen').checked;const pw=$('hPw').value;if(!isOpen&&pw.length<3){mpStatus('Use a password of at least 3 characters, or tick Open lobby.',true);return}
+  if(isOpen){mpStatus('Creating open lobby…');initAudio();if(AC&&AC.state==='suspended')AC.resume();try{NET.nroom=await ROOM.hostOpen()}catch(err){mpStatus(err&&err.code==='full'?'Too many open lobbies right now. Try a private one.':'Could not create the lobby ('+((err&&(err.type||err.code))||'network')+'). Check your connection and try again.',true);return}
+    saveName();NET.role='host';NET.code='open';NET.name=nameVal();startDay();toast('Open lobby is up — friends can join from the list','gold');return}
   const A='abcdefghjkmnpqrstuvwxyz23456789';let code='';for(let i=0;i<5;i++)code+=A[Math.floor(Math.random()*A.length)];
   mpStatus('Creating lobby…');initAudio();if(AC&&AC.state==='suspended')AC.resume();
-  try{NET.nroom=await (ROOM.isPeer?ROOM.join(roomName(code,pw),true):ROOM.join(roomName(code,pw)))}catch(err){mpStatus('Could not create the lobby. Try again in a moment.',true);return}
+  try{NET.nroom=await (ROOM.isPeer?ROOM.join(roomName(code,pw),true):ROOM.join(roomName(code,pw)))}catch(err){mpStatus('Could not create the lobby ('+((err&&(err.type||err.code))||'network')+'). Try again in a moment.',true);return}
   saveName();NET.role='host';NET.code=code;NET.name=nameVal();startDay();toast(`Lobby ${code.toUpperCase()} is open — share the code and password`,'gold')});
 $('fJoin').addEventListener('submit',async e=>{e.preventDefault();const code=$('jCode').value.trim().toLowerCase(),pw=$('jPw').value;
   if(!/^[a-z0-9]{5}$/.test(code)){mpStatus('The lobby code is 5 letters and numbers.',true);return}
-  mpStatus('Looking for the lobby…');initAudio();if(AC&&AC.state==='suspended')AC.resume();let r;
-  try{r=await (ROOM.isPeer?ROOM.join(roomName(code,pw),false):ROOM.join(roomName(code,pw)))}catch(err){const c=err&&err.code;mpStatus(c==='bad_pw'?'Wrong password for that lobby.':c==='no_lobby'?'No lobby found with that code. Check it with the host.':'Could not reach multiplayer. Try again in a moment.',true);return}
+  joinLobby(roomName(code,pw),code)});
+let joining=false;
+async function joinLobby(rname,code){if(joining)return;joining=true;try{await joinLobby2(rname,code)}finally{joining=false}}
+async function joinLobby2(rname,code){
+  mpStatus('Connecting to the lobby… this can take up to 20 seconds');initAudio();if(AC&&AC.state==='suspended')AC.resume();let r;
+  try{r=await (ROOM.isPeer?ROOM.join(rname,false):ROOM.join(rname))}catch(err){const c=err&&err.code;mpStatus(c==='bad_pw'?'Wrong password for that lobby.':c==='full'?'That lobby is full (8 players).':c==='no_lobby'?'No lobby found with that code. Check it with the host — they must be on the same game link with the lobby open.':'Could not connect to the host ('+((err&&err.type)||c||'network')+'). Some school or work Wi-Fi blocks this — try another network.',true);return}
   const t0=performance.now();while(performance.now()-t0<7000){let ps=[];try{ps=r.peers()}catch(er){}if(ps.some(p=>!p.sameTab&&p.presence&&p.presence.role==='h'&&p.presence.g))break;await new Promise(res=>setTimeout(res,250))}
   if(!r.peers().some(p=>!p.sameTab&&p.presence&&p.presence.role==='h')){r.leave().catch(()=>{});mpStatus('No lobby found with that code and password.',true);return}
   saveName();NET.nroom=r;NET.role='client';NET.code=code;NET.name=nameVal();NET.hostSeen=performance.now();
-  P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();toast('Joined the lobby — click the game to look around','gold')});
+  P.x=-3.5+Math.random();P.z=-2.2;S.mode='play';S.hands=[];['title','dayend'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;refreshHands();toast('Joined the lobby — click the game to look around','gold')}
 
 /* =============== LOOP =============== */
 let last=performance.now(),hudT=0;const _lp=new THREE.Vector3();
