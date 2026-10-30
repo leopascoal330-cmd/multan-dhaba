@@ -195,10 +195,10 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
 <div class="ov" id="pause" hidden><div class="card"><h2>Paused</h2><div class="body">
   <label class="set" for="pix2">Pixel size <input type="range" id="pix2" min="1" max="6" step="0.5" value="2"><span id="pixV2">2×</span></label>
   <label class="set" for="vol">Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
-  <div class="btns"><button class="btn" id="bResume">Resume</button></div>
+  <div class="btns"><button class="btn" id="bResume">Resume</button><button class="btn ghost" id="bReset" hidden>Reset world save</button></div><p class="note" id="resetNote" hidden style="font-size:12px">Only the host can reset the shared world save.</p>
 </div></div></div>
 
-<div class="ov" id="goCard" hidden><div class="card"><div class="stripe"></div><h2>GAME OVER</h2><div class="body"><p class="note" id="goText">The boss was not proud. Multan Dhaba is gone.</p><div class="btns" style="justify-content:center"><button class="btn" id="goNew">Start a new game</button></div></div></div></div>
+<div class="ov" id="goCard" hidden><div class="card"><div class="stripe"></div><h2>GAME OVER</h2><div class="body"><p class="note" id="goText">The boss was not proud. He paid off the loan and gave you $45 to rebuild — one last chance.</p><div class="btns" style="justify-content:center"><button class="btn" id="goNew">Rebuild the restaurant</button></div></div></div></div>
 <div class="ov" id="dayend" hidden><div class="card"><div class="stripe"></div><h2><span id="deTitle">Day 1 closed</span></h2><div class="body" id="deBody"></div></div></div>
 
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
@@ -273,7 +273,7 @@ const ING_FOR={chicken:['bc','tm','bir'],sauce:['bc'],tikka:['tm'],rice:['bir'],
 const ingOpen=k=>(ING_FOR[k]||[]).some(onMenu);
 const unlockable=()=>DISH_KEYS.filter(k=>!onMenu(k)&&DISHES[k].day<=S.day);
 S.ds=newDS();
-const SAVEKEY='multan-dhaba-v5';
+const SAVEKEY='multan-dhaba-v5';const DEF=JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge});
 const ORDERABLE=['chicken','rice'];
 function save(){try{localStorage.setItem(SAVEKEY,JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}worldSave()}
 function load(){try{const d=JSON.parse(localStorage.getItem(SAVEKEY)||'null');if(d&&d.day){if(Array.isArray(d.menu))S.menu=d.menu.filter(k=>DISHES[k]);S.money=d.money;S.debt=d.debt||0;S.day=d.day;S.ratings=d.ratings||[];Object.assign(S.stock,d.stock);Object.assign(S.fridge,d.fridge||{});return true}}catch(e){}return false}
@@ -1324,7 +1324,7 @@ addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space')e.preventDe
   if(e.code==='KeyV')P.third=!P.third});
 addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='KeyF'&&P.charging){P.charging=false;if(S.hands.length&&!uiOpen()&&S.mode==='play'){P.reach=1;doAct({a:'th',x:P.x-Math.sin(P.yaw)*0.4,z:P.z-Math.cos(P.yaw)*0.4,yaw:P.yaw,pitch:P.pitch,pw:Math.round(P.charge*100)/100})}}});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
-let pausedAt=0;function togglePause(){if(S.mode!=='play')return;S.paused=!S.paused;if(S.paused)pausedAt=performance.now();$('pause').hidden=!S.paused;if(S.paused){exitLock();if(AC&&NET.role==='solo')AC.suspend()}else if(AC)AC.resume()}
+let pausedAt=0;function togglePause(){if(S.mode!=='play')return;S.paused=!S.paused;if(S.paused)pausedAt=performance.now();$('pause').hidden=!S.paused;$('bReset').hidden=NET.role==='client';$('resetNote').hidden=NET.role!=='client';if(S.paused){exitLock();if(AC&&NET.role==='solo')AC.suspend()}else if(AC)AC.resume()}
 $('bResume').onclick=()=>{togglePause();lock()};
 
 /* =============== DAY FLOW =============== */
@@ -1335,14 +1335,14 @@ function startDay(){NET.summary=null;S.spills=[];syncSpills();S.power=1;stations
 function endDay(){S.mode='dayend';exitLock();const q=quota(S.day);const interest=Math.round(S.debt*0.10);S.debt+=interest;
   const paid=Math.min(q,S.money),short=q-paid;S.money-=paid;S.debt+=short;
   const net=S.ds.rev+S.ds.tips-S.ds.spent-q,over=S.debt>DEBT_LIMIT;NET.summary=[S.ds.rev,S.ds.tips,S.ds.spent,q,short,S.money,S.debt,over?1:0];
-  if(over){wipeSave();S.mode='play';lock();gameOverStart();return}
+  if(over){S.mode='play';lock();gameOverStart();return}
   $('deTitle').textContent=`Day ${S.day} closed`;
   $('deBody').innerHTML=`<div class="stat"><span>Food sales</span><span>$${S.ds.rev}</span><span>Tips</span><span>$${S.ds.tips}</span><span>Stock + delivery</span><span>−$${S.ds.spent}</span><span>Quota (rent, gas, wages)</span><span>−$${q}</span><span class="t">Day result</span><span class="t" style="color:${net>=0?'var(--good)':'var(--bad)'}">${net>=0?'+':'−'}$${Math.abs(net)}</span>
     <span>Served / walked out</span><span>${S.ds.served} / ${S.ds.walked}</span>${interest?`<span>Loan interest</span><span style="color:var(--bad)">+$${interest}</span>`:''}${short?`<span>Quota you couldn't cover</span><span style="color:var(--bad)">+$${short} to loan</span>`:''}<span>Cash</span><span style="color:var(--gold)">$${S.money}</span><span>Loan</span><span style="color:${S.debt?'var(--bad)':'var(--good)'}">$${S.debt}</span></div>
     <p class="note">${over?'The bank called in the loan. Multan Dhaba is closed.':short?'You missed the quota. Pay the loan off on the PC before the interest stacks up.':S.debt?'Quota met. You still owe the bank — pay it down on the PC.':'Quota met. Tomorrow is busier and the quota goes up.'}</p>
     <div class="btns">${over?'<button class="btn" id="deRestart">Start over</button>':`<button class="btn" id="deNext">Open day ${S.day+1} · quota $${quota(S.day+1)}</button>`}</div>`;
   $('dayend').hidden=false;
-  if(over){wipeSave();$('deRestart').onclick=()=>location.reload()}
+  if(over){$('deRestart').onclick=()=>bailout()}
   else{S.day++;save();$('deNext').onclick=()=>{startDay();lock()};if(NET.role==='host')setTimeout(()=>{if(S.mode==='dayend'&&!$('dayend').hidden)$('deNext').click()},15000)}}
 function updateDay(dt){if(S.go){updateGameOver(dt);return}S.clock+=dt;
   if(!S.closing&&S.clock>=DAY_LEN){S.closing=true;toast('Closing time — finish the last tables','gold')}
@@ -1401,8 +1401,13 @@ function clientGameOver(dt){goT+=dt;if(S.go===1){ringT-=dt;if(ringT<=0){ringT=3.
 function updateGameOver(dt){goT+=dt;
   if(S.go===1){ringT-=dt;if(ringT<=0){ringT=3.2;ringSnd()}phone.g.rotation.z=Math.sin(goT*60)*0.04*(ringT>2.2?1:0);phone.hs.position.y=0.09+(ringT>2.2?Math.abs(Math.sin(goT*40))*0.012:0);if(goT>25)answerPhone()}
   else if(S.go===2){phone.hs.position.set(0.15,0.3,0.1);if(goT>4.6){S.go=3;goT=0;explode()}}
-  else if(S.go===3){if(goT>4&&$('goCard').hidden){exitLock();$('goCard').hidden=false}}}
-$('goNew').onclick=()=>{try{localStorage.removeItem(SAVEKEY)}catch(e){}if(NET.nroom)NET.nroom.leave().catch(()=>{});location.reload()};
+  else if(S.go===3){if(goT>4&&$('goCard').hidden){exitLock();$('goCard').hidden=false}if(NET.role==='host'&&goT>14)bailout()}}
+$('goNew').onclick=()=>{if(NET.role==='client'){$('goText').textContent='Waiting for the host to rebuild…';return}bailout()};
+function bailout(){S.money=45;S.debt=0;S.go=0;goT=0;S.powerT=0;S.power=1;$('goCard').hidden=true;$('dayend').hidden=true;startDay();lock();save();toast('The restaurant is rebuilt — same day, same menu, fresh start on the money','gold')}
+function resetWorld(){const d=JSON.parse(DEF);S.menu=d.menu;S.money=d.money;S.debt=d.debt;S.day=d.day;S.ratings=[];Object.assign(S.stock,d.stock);Object.assign(S.fridge,d.fridge);
+  S.go=0;goT=0;S.powerT=0;$('goCard').hidden=true;$('dayend').hidden=true;refreshShelves();refreshFridge();refreshMenuSign();try{localStorage.removeItem(SAVEKEY)}catch(e){}startDay();save();toast('World save reset — back to day 1','gold')}
+let resetArm=0;$('bReset').onclick=()=>{if(NET.role==='client')return;if(performance.now()-resetArm>3000){resetArm=performance.now();$('bReset').textContent='Click again to wipe the save';setTimeout(()=>{$('bReset').textContent='Reset world save'},3000);return}
+  resetArm=0;$('bReset').textContent='Reset world save';togglePause();resetWorld()};
 
 /* =============== FLOOR ITEMS =============== */
 const GROUND=[];let gid=0;
@@ -1481,7 +1486,7 @@ function applySnap(g){if(!g||typeof g!=='object')return;
   if(Array.isArray(g.sp)){S.spills=g.sp.filter(Array.isArray).map(v=>({id:v[0],x:v[1]/100,z:v[2]/100,t:9}));syncSpills()}
   if(Array.isArray(g.tw)&&(g.tw[0]!==S.wall.ext||g.tw[1]!==S.wall.broom)){S.wall.ext=g.tw[0]?1:0;S.wall.broom=g.tw[1]?1:0;refreshTools()}
   if(Array.isArray(g.kn)){const me=g.kn.find(e=>Array.isArray(e)&&e[0]===NET.myPeer);if(me&&me[1]!==NET.knockStamp)startKnock(me[1])}
-  if(typeof g.go==='number'&&g.go!==S.go){const was=S.go;S.go=g.go;goT=0;if(S.go===2&&was<2)playBoss();if(S.go===3&&was<3)explode()}
+  if(typeof g.go==='number'&&g.go!==S.go){const was=S.go;S.go=g.go;goT=0;if(S.go===0&&was){$('goCard').hidden=true;$('goText').textContent='The boss was not proud. He paid off the loan and gave you $45 to rebuild — one last chance.';lock()}if(S.go===2&&was<2)playBoss();if(S.go===3&&was<3)explode()}
   if(Array.isArray(g.mn)&&g.mn.join()!==S.menu.join()){S.menu=g.mn.filter(k=>DISHES[k]);refreshShelves();refreshMenuSign()}
   if(g.pw===0||g.pw===1){if(g.pw===0&&S.power!==0)S.powerT=22;S.power=g.pw}
   if(NET.evSeen===undefined)NET.evSeen=Array.isArray(g.ev)?g.ev[0]:0;
@@ -1527,13 +1532,14 @@ function netTick(dt){if(NET.role==='solo'||!NET.nroom)return;NET.sendT-=dt;const
   if(NET.role==='host'&&!ROOM.isPeer&&NET.myPeer&&peers.some(p=>!p.sameTab&&p.presence&&p.presence.role==='h'&&p.presence.g&&p.peer<NET.myPeer)){demoteToClient();return}
   if(NET.role==='host'){const live=new Set();
     for(const p of peers){if(p.sameTab)continue;const pr=p.presence||{};if(pr.role!=='c')continue;live.add(p.peer);const pl=getPlayer(p.peer);
-      for(const e of (Array.isArray(pr.q)?pr.q:[])){if(!Array.isArray(e)||typeof e[0]!=='number'||!e[1]||typeof e[1].a!=='string')continue;if(e[0]>pl.lastSeq){pl.lastSeq=e[0];if(S.mode==='play'||e[1].a==='pay')execAct(e[1],p.peer)}}}
+      for(const e of (Array.isArray(pr.q)?pr.q:[])){if(!Array.isArray(e)||typeof e[0]!=='number'||!e[1]||typeof e[1].a!=='string')continue;if(e[0]>pl.lastSeq){pl.lastSeq=e[0];NET.sendT=Math.min(NET.sendT,0.02);if(S.mode==='play'||e[1].a==='pay')execAct(e[1],p.peer)}}}
     for(const k in NET.players)if(!live.has(k))delete NET.players[k];
-    if((NET.saveT=(NET.saveT||0)-dt)<=0){NET.saveT=10;worldSave()}if(NET.sendT<=0){NET.sendT=0.1;const sn=makeSnap();while(JSON.stringify(sn).length>3500&&sn.gr.length)sn.gr.shift();r.presence({role:'h',nm:NET.name,p:myP(),kd:P.down>0?1:0,g:sn}).catch(()=>{})}}
+    if((NET.saveT=(NET.saveT||0)-dt)<=0){NET.saveT=5;worldSave()}if(NET.sendT<=0){NET.sendT=0.1;const sn=makeSnap();while(JSON.stringify(sn).length>3500&&sn.gr.length)sn.gr.shift();r.presence({role:'h',nm:NET.name,p:myP(),kd:P.down>0?1:0,g:sn}).catch(()=>{})}}
   else{const host=peers.find(p=>!p.sameTab&&p.presence&&p.presence.role==='h');
     if(host){NET.hostSeen=performance.now();if(host.presence.g&&host.presence.g!==NET.lastG){NET.lastG=host.presence.g;applySnap(NET.lastG)}}
     else if(performance.now()-NET.hostSeen>4000){migrateHost();return}
-    if(NET.sendT<=0){NET.sendT=0.066;r.presence({role:'c',nm:NET.name,p:myP(),kd:P.down>0?1:0,q:NET.outbox}).catch(()=>{})}}
+    if(NET.sendT<=0){NET.sendT=0.1;const pr={role:'c',nm:NET.name,p:myP(),kd:P.down>0?1:0,q:NET.outbox},j=JSON.stringify(pr),now=performance.now();if(j!==NET.lastSent||now-(NET.lastSentAt||0)>1000){NET.lastSent=j;NET.lastSentAt=now;r.presence(pr).catch(()=>{})}}
+    if((NET.saveT=(NET.saveT||0)-dt)<=0){NET.saveT=10;try{localStorage.setItem(SAVEKEY,JSON.stringify({menu:S.menu,money:S.money,debt:S.debt,day:S.day,stock:S.stock,fridge:S.fridge,ratings:S.ratings.slice(-30)}))}catch(e){}}}
   if((badgeT-=dt)<=0){badgeT=0.5;const names=peers.filter(p=>p.presence&&p.presence.role).map(p=>String(p.presence.nm||'Player').slice(0,16)+(p.sameTab?' (you)':''));const b=$('lobby');b.hidden=false;
     b.innerHTML='';const t=document.createElement('div');t.innerHTML=`Lobby <b></b> · ${names.length} player${names.length===1?'':'s'}`;t.querySelector('b').textContent=NET.code==='open'?'OPEN':NET.code.toUpperCase();b.appendChild(t);const l=document.createElement('div');l.style.color='var(--dim)';l.textContent=names.join(', ');b.appendChild(l)}}
 function lobbyClosed(msg){if(NET.nroom)NET.nroom.leave().catch(()=>{});NET.nroom=null;NET.role='solo';S.mode='dayend';exitLock();stopMusic();$('deTitle').textContent='Lobby closed';$('deBody').innerHTML='';
@@ -1592,12 +1598,13 @@ function mqttRoom(){const R={isRelay:true};
       if(!txt){delete st.others[id];return}if(txt.length>9000)return;
       try{const m=JSON.parse(txt);if(!m||typeof m!=='object'||!m.p||typeof m.p!=='object'||Array.isArray(m.p))return;const o=st.others[id];if(o&&(m.s|0)<=o.s&&performance.now()-o.t<3000)return;st.others[id]={p:m.p,s:m.s|0,t:performance.now()}}catch(e){}};
     for(const url of BROKERS){let c;try{c=mqtt.connect(url,{clientId:me+'-'+BROKERS.indexOf(url),reconnectPeriod:2000,connectTimeout:7000,keepalive:20,clean:true,will:{topic:base+'p/'+me,payload:'',qos:0,retain:false}})}catch(e){if(--pending===0)finish();continue}
-      let first=true;c.on('connect',()=>{c.subscribe([base+'p/+',base+'save'],{qos:0});if(first){first=false;st.cls.push(c);if(!done)setTimeout(finish,900)}});
+      c.bi=BROKERS.indexOf(url);let first=true;c.on('connect',()=>{c.subscribe([base+'p/+',base+'save'],{qos:0});if(first){first=false;st.cls.push(c);if(!done)setTimeout(finish,900)}});
       c.on('message',onMsg);c.on('error',()=>{});
       setTimeout(()=>{if(first){first=false;if(--pending===0)finish()}},7500)}
     setTimeout(finish,8000);let seq=0;
     const pub=(t,v,ret)=>{for(const c of st.cls)if(c.connected){try{c.publish(t,v,{qos:0,retain:!!ret})}catch(e){}}};
-    const api={presence:async patch=>{for(const k in patch){if(patch[k]===null)delete st.pres[k];else st.pres[k]=patch[k]}pub(base+'p/'+me,JSON.stringify({s:++seq,p:st.pres}))},
+    const pub1=(t,v)=>{const c=st.cls.filter(c=>c.connected).sort((a,b)=>a.bi-b.bi)[0];if(c){try{c.publish(t,v,{qos:0})}catch(e){}}};
+    const api={presence:async patch=>{for(const k in patch){if(patch[k]===null)delete st.pres[k];else st.pres[k]=patch[k]}pub1(base+'p/'+me,JSON.stringify({s:++seq,p:st.pres}))},
       peers:()=>{const out=[{peer:me,sameTab:true,isMe:true,presence:st.pres}];const now=performance.now();for(const id in st.others){const o=st.others[id];if(now-o.t<4500)out.push({peer:id,sameTab:false,isMe:false,presence:o.p});else if(now-o.t>30000)delete st.others[id]}return out},
       leave:async()=>{pub(base+'p/'+me,'');setTimeout(()=>{for(const c of st.cls){try{c.end(true)}catch(e){}}},150)},
       saved:()=>st.saved,save:d=>pub(base+'save',d?JSON.stringify(Object.assign({t:Date.now()},d)):'',true),
