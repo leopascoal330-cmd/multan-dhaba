@@ -207,8 +207,10 @@ html,body{height:100%;margin:0;overflow:hidden;background:#140c08;color:var(--in
 <div class="ov" id="goCard" hidden><div class="card"><div class="stripe"></div><h2>GAME OVER</h2><div class="body"><p class="note" id="goText">The boss was not proud. He paid off the loan and gave you $45 to rebuild — one last chance.</p><div class="btns" style="justify-content:center"><button class="btn" id="goNew">Rebuild the restaurant</button></div></div></div></div>
 <div class="ov" id="dayend" hidden><div class="card"><div class="stripe"></div><h2><span id="deTitle">Day 1 closed</span></h2><div class="body" id="deBody"></div></div></div>
 
-<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>window.addEventListener("error",function(e){if(e.message&&!window.__shownErr){window.__shownErr=1;var d=document.createElement("div");d.style.cssText="position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#400;color:#fff;font:13px monospace;padding:8px";d.textContent="Game error (send this to the dev): "+e.message+" @"+(e.lineno||"");document.body&&document.body.appendChild(d)}});
+window.MQTT_WAIT=new Promise(function(res){var u=["https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js","https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"],i=0;function nx(){if(window.mqtt||i>=u.length)return res();var s=document.createElement("script");s.src=u[i++];s.async=true;var t=setTimeout(nx,6000);s.onload=function(){clearTimeout(t);res()};s.onerror=function(){clearTimeout(t);nx()};document.head.appendChild(s)}nx();setTimeout(res,14000)});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
 <script>
 (()=>{
 'use strict';
@@ -1678,7 +1680,7 @@ let ROOM=null;
 const nameVal=()=>($('mpName').value.trim()||'Player').slice(0,14);
 function mpStatus(t,err){const e=$('mpStatus');e.textContent=t;e.classList.toggle('err',!!err)}
 try{const n=localStorage.getItem('nehan-name');if(n)$('mpName').value=n}catch(e){}
-(async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&window.mqtt)ROOM=mqttRoom();else if(!ROOM&&window.Peer)ROOM=peerRoom();
+(async()=>{try{ROOM=window.claude&&window.claude.use?await window.claude.use('room'):null}catch(e){ROOM=null}if(!ROOM&&!window.mqtt&&window.MQTT_WAIT){mpStatus('Connecting…');await window.MQTT_WAIT}if(!ROOM&&window.mqtt)ROOM=mqttRoom();else if(!ROOM&&window.Peer)ROOM=peerRoom();
   if(ROOM){$('bHost').disabled=false;$('bJoin').disabled=false;mpStatus('Press PLAY to jump into the restaurant.');if(ROOM.isPeer){$('openRow').hidden=false;$('openBox').hidden=false;ROOM.info=()=>({nm:NET.name||'Someone',n:1+Object.keys(NET.players).length,d:S.day})}}
   else mpStatus(window.Peer===undefined&&window.mqtt===undefined&&!window.claude?'Multiplayer could not load. Check your internet connection and reload.':'Multiplayer only works when the game is opened on claude.ai by someone signed in who the game is shared with.',true)})();
 $('bHost').onclick=()=>{$('fHost').hidden=false;$('fJoin').hidden=true;$('hPw').focus()};
