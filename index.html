@@ -1647,7 +1647,7 @@ function mqttRoom(){const R={isRelay:true};
       connected:()=>st.cls.some(c=>c.connected)}});
   return R}
 // ===== ONE SHARED WORLD: first player in runs the restaurant, everyone else joins it =====
-const WORLD='dhaba-world-world';addEventListener('beforeunload',()=>{try{NET.nroom&&NET.nroom.leave()}catch(e){}});const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const WORLD=(()=>{try{const w=new URLSearchParams(location.search).get('world');if(w&&/^[a-z0-9]{1,16}$/.test(w))return 'dhaba-'+w+'-world'}catch(e){}return 'dhaba-world-world'})();addEventListener('beforeunload',()=>{try{NET.nroom&&NET.nroom.leave()}catch(e){}});const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function joinWorld(){if(joining)return;joining=true;saveName();NET.name=nameVal();initAudio();if(AC&&AC.state==='suspended')AC.resume();
   if(!ROOM){joining=false;startDay();lock();return}
   $('bStart').disabled=true;mpStatus('Joining the restaurant…');
