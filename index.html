@@ -366,6 +366,12 @@ const SKY=[new THREE.Color('#a9cbe0'),new THREE.Color('#e9a76e'),new THREE.Color
 scene.background=SKY[0].clone();scene.fog=new THREE.Fog(SKY[0].clone(),22,75);
 const camera=new THREE.PerspectiveCamera(72,1,0.04,100);camera.rotation.order='YXZ';scene.add(camera);
 const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:'high-performance'});renderer.setPixelRatio(1);$('stage').appendChild(renderer.domElement);
+// if the graphics card drops the 3D context, ask to reload instead of the browser killing the tab
+renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();try{localStorage.setItem('md-crash',String(Date.now()))}catch(x){}const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:#140d09;color:#efe2cc;font:16px system-ui;text-align:center;padding:20px';d.innerHTML='<div>Your graphics card ran out of memory.<br><br><button style="font-size:18px;padding:10px 22px">Reload in low-quality mode</button></div>';d.querySelector('button').onclick=()=>{try{localStorage.setItem('nehan-pix-v2','3');localStorage.setItem('md-safe','1')}catch(x){}location.reload()};document.body.appendChild(d)});
+// a tab that keeps getting killed while loading comes back in low-quality mode
+const SAFE=(()=>{try{const now=Date.now(),last=+localStorage.getItem('md-boot')||0,n=(now-last<45000&&localStorage.getItem('md-clean')!=='1')?(+localStorage.getItem('md-boots')||0)+1:0;
+  localStorage.setItem('md-boot',String(now));localStorage.setItem('md-boots',String(n));localStorage.setItem('md-clean','0');addEventListener('pagehide',()=>{try{localStorage.setItem('md-clean','1')}catch(e){}});
+  if(n>=2){localStorage.setItem('md-safe','1');localStorage.setItem('nehan-pix-v2','3')}return localStorage.getItem('md-safe')==='1'}catch(e){return false}})();
 let pixelScale=2;try{const v=parseFloat(localStorage.getItem('nehan-pix-v2'));if(v>=1&&v<=6)pixelScale=v}catch(e){}
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(Math.max(1,Math.floor(w/pixelScale)),Math.max(1,Math.floor(h/pixelScale)),false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);
@@ -552,7 +558,7 @@ const nameTex=textTex([{t:'MULTAN DHABA',b:1,size:30,c:'#e3b04a'},{t:'Desi khana
 plane(texMat(nameTex,true),4.0,1.25,6,1.85,0.15);
 let menuTex=textTex([{t:'MENU',b:1,size:18,c:'#e3b04a'},'Butter Chicken  $12','Tikka Masala    $13','Chicken Biryani $11','Samosa  $4  ·  Naan  $3','Roti  $2  ·  Chai  $3','Ayran  $3  ·  Cola  $2'],200,176,'#241812','#efe2cc',13,'#c9a24a');
 const menuSignMat=texMat(menuTex,true);plane(menuSignMat,1.6,1.4,-9.84,1.85,3.75,Math.PI/2);
-function refreshMenuSign(){const L=[{t:'MENU',b:1,size:18,c:'#e3b04a'}];['bc','tm','bir','sam','naan','roti','chai','ayran','cola'].forEach(k=>{const on=onMenu(k);L.push({t:on?`${ITEMS[k].name}  $${ITEMS[k].price}`:`${ITEMS[k].name} — soon`,size:on?13:11,c:on?'#efe2cc':'#7a6a5a'})});menuSignMat.map=textTex(L,200,240,'#241812','#efe2cc',12,'#c9a24a');menuSignMat.needsUpdate=true}
+function refreshMenuSign(){const L=[{t:'MENU',b:1,size:18,c:'#e3b04a'}];['bc','tm','bir','sam','naan','roti','chai','ayran','cola'].forEach(k=>{const on=onMenu(k);L.push({t:on?`${ITEMS[k].name}  $${ITEMS[k].price}`:`${ITEMS[k].name} — soon`,size:on?13:11,c:on?'#efe2cc':'#7a6a5a'})});if(menuSignMat.map)menuSignMat.map.dispose();menuSignMat.map=textTex(L,200,240,'#241812','#efe2cc',12,'#c9a24a');menuSignMat.needsUpdate=true}
 // hanging brass lanterns
 const LANTERNS=[];
 [[-6.5,4],[-2.6,4],[3.1,4],[7.0,4],[0,6.6],[0,1.6]].forEach(([x,z],i)=>{box(0.02,0.5,0.02,'#3a2a1a',x,2.4,z);const top=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.12,6),M('#b8893a'));top.position.set(x,2.36,z);scene.add(top);
@@ -580,7 +586,7 @@ const SEATS=[];
 
 /* =============== CITY (instanced, unlit = cheap) =============== */
 const CITY_MATS=[];
-(()=>{let sd=11;const r=()=>{sd=(sd*16807)%2147483647;return sd/2147483647};
+(()=>{if(SAFE)return;let sd=11;const r=()=>{sd=(sd*16807)%2147483647;return sd/2147483647};
   const winT=canvasTex(16,32,g=>{g.fillStyle='#fff';g.fillRect(0,0,16,32);for(let y=2;y<32;y+=8)for(let x=2;x<16;x+=7){g.fillStyle=((x*7+y*3)%5===0)?'#f2d89a':'#4a5560';g.fillRect(x,y,4,5);g.fillStyle='#d8d0c0';g.fillRect(x-1,y+5,6,1)}});
   winT.wrapS=winT.wrapT=THREE.RepeatWrapping;
   const side=(c)=>{const m=new THREE.MeshBasicMaterial({map:winT,color:c});CITY_MATS.push([m,c]);return m};
@@ -853,6 +859,7 @@ function clothTex(o,part){return linTex(32,32,g=>{const gr=g.createLinearGradien
   else{g.fillStyle=shade(o.shirt,-0.28);g.fillRect(15,0,1,32);g.globalAlpha=0.15;g.fillStyle='#000';for(let x=3;x<32;x+=6)g.fillRect(x,8,1,24);g.globalAlpha=1;if(o.apron){g.fillStyle='#f2efe6';g.fillRect(9,0,14,24);g.fillStyle='#d6d0c2';g.fillRect(9,23,14,1)}}})}
 const headGeo=(()=>{const gg=new THREE.SphereGeometry(0.15,10,8);const p=gg.attributes.position;for(let i=0;i<p.count;i++){const y=p.getY(i);if(y<0){const k=1+y/0.15*0.3;p.setX(i,p.getX(i)*k);p.setZ(i,p.getZ(i)*k)}}gg.computeVertexNormals();return gg})();
 const hairGeo=new THREE.SphereGeometry(0.158,10,5,0,Math.PI*2,0,0.95);
+function freeGPU(root){try{root.traverse(o=>{const m=o.material;if(m&&m.map&&m.map.isCanvasTexture)m.map.dispose()})}catch(e){}}
 function makePerson(o,face){const g=new THREE.Group(),skinM=SM(o.skin),pantM=SM(o.pants),shirtM=SM(o.shirt),legs=[],knees=[],arms=[],elbows=[];
   const pel=new THREE.Mesh(new THREE.CylinderGeometry(0.168,0.152,0.18,9),pantM);pel.scale.z=0.72;pel.position.y=0.93;g.add(pel);
   [-0.092,0.092].forEach(x=>{const hip=new THREE.Group();hip.position.set(x,0.9,0);g.add(hip);
@@ -914,7 +921,7 @@ function customerLeave(c){c.leaving=true;c.state='walk';c.seat.taken=null;const 
   c.mesh.position.y=0;poseStand(c.mesh);c.plates.forEach(m=>scene.remove(m));c.plates=[];unreg(c);renderBubble(c)}
 function updateCustomer(c,dt){const m=c.mesh;
   if(c.state==='walk'){const t=c.path[c.pi];const dx=t[0]-m.position.x,dz=t[1]-m.position.z,d=Math.hypot(dx,dz),sp=1.7;
-    if(d<0.05){c.pi++;if(c.pi>=c.path.length){if(c.leaving){scene.remove(m);c.el.remove();customers.splice(customers.indexOf(c),1);return}
+    if(d<0.05){c.pi++;if(c.pi>=c.path.length){if(c.leaving){scene.remove(m);freeGPU(m);c.el.remove();customers.splice(customers.indexOf(c),1);return}
         c.state='seated';m.position.set(c.seat.x,-0.38,c.seat.z);m.rotation.y=c.seat.rot;poseSit(m);renderBubble(c)}}
     else{const s=Math.min(d,sp*dt);m.position.x+=dx/d*s;m.position.z+=dz/d*s;const tr=Math.atan2(-dx,-dz);let dr=tr-m.rotation.y;while(dr>Math.PI)dr-=Math.PI*2;while(dr<-Math.PI)dr+=Math.PI*2;m.rotation.y+=dr*Math.min(1,dt*10);animWalk(m,dt,true,sp)}}
   else if(c.state==='seated'){c.patience-=dt*(anyFire()?1.7:1);const r=c.patience/c.maxPat;if(c.bar){c.bar.style.width=(r*100)+'%';c.bar.style.background=r>.5?'#86d470':r>.25?'#e3a83a':'#ff6a4d'}
@@ -1532,7 +1539,7 @@ function applyCusts(list){const seen=new Set();
     c.tx=x/20;c.tz=z/20;c.try=ry/100;c.pat=(pat|0)/100;const st=['walk','seated','eating','walk'][sc]||'walk',lv=sc===3,ok=(ord||[]).map(n=>IK[n]).filter(Boolean);const key=st+lv+ok.join();
     if(key!==c.key){if(lv&&!c.leaving&&ang&&c.key)fuckYou(c.mesh.position,c);c.key=key;c.state=st;c.leaving=lv;c.order=ok;if(st==='seated'||st==='eating')poseSit(c.mesh);else poseStand(c.mesh);if(lv){unreg(c);c.plates.forEach(m=>scene.remove(m));c.plates=[]}renderBubble(c)}
     if(!lv&&Array.isArray(srv)&&srv.length>c.plates.length){const dz=Math.sign(seat.tableZ-seat.z);for(let n=c.plates.length;n<srv.length;n++){if(!IK[srv[n]])continue;const pl=itemMesh(IK[srv[n]]);pl.position.set(seat.x-0.3+n*0.3,0.79,seat.z+dz*0.58);scene.add(pl);c.plates.push(pl)}}}
-  for(const [id,c] of NET.ccust)if(!seen.has(id)){scene.remove(c.mesh);c.el.remove();unreg(c);c.plates.forEach(m=>scene.remove(m));NET.ccust.delete(id)}}
+  for(const [id,c] of NET.ccust)if(!seen.has(id)){scene.remove(c.mesh);freeGPU(c.mesh);c.el.remove();unreg(c);c.plates.forEach(m=>scene.remove(m));NET.ccust.delete(id)}}
 function updateClientCusts(dt){const now=performance.now();for(const c of NET.ccust.values()){const m=c.mesh;
   if(c.state==='seated'||c.state==='eating'){m.position.set(c.seat.x,-0.38,c.seat.z);m.rotation.y=c.seat.rot;
     if(c.state==='eating'){m.userData.arms[1].rotation.x=0.7;m.userData.elbows[1].rotation.x=1.5+Math.sin(now/180)*0.4}else{m.userData.head.rotation.y=Math.sin(now/900+m.userData.phase)*0.3;if(c.bar){c.bar.style.width=(c.pat*100)+'%';c.bar.style.background=c.pat>.5?'#86d470':c.pat>.25?'#e3a83a':'#ff6a4d'}}}
@@ -1552,7 +1559,7 @@ function updateAvatars(dt){if(!NET.nroom)return;let peers=[];try{peers=NET.nroom
     m.userData.carry=hands.length>0;if(a.kd>0.02){ragdollPose(m,a.kd,performance.now()/1000);a.wasRd=true}else{if(a.wasRd){clearRagdoll(m);a.wasRd=false}animWalk(m,dt,d>0.03,3.4)}
     if(a.sayT>0){a.sayT-=dt;if(a.sayT<=0)a.say=null}const nm=String(pr.nm||'Player').slice(0,16)+(pr.role==='h'?' · host':''),key=nm+'|'+(a.say||'');if(a.nm!==key){a.nm=key;a.el.innerHTML='';if(a.say){const sb=document.createElement('div');sb.className='sayb';sb.textContent=a.say;a.el.appendChild(sb)}const sp=document.createElement('div');sp.className='slotlab';sp.textContent=nm;a.el.appendChild(sp)}
     placeLabel(a.el,m.position.clone().add(new THREE.Vector3(0,2.05,0)),24)}
-  for(const k in NET.avatars)if(!seen.has(k)){const a=NET.avatars[k];scene.remove(a.mesh);a.el.remove();delete NET.avatars[k]}}
+  for(const k in NET.avatars)if(!seen.has(k)){const a=NET.avatars[k];scene.remove(a.mesh);freeGPU(a.mesh);a.el.remove();delete NET.avatars[k]}}
 // ---- text chat (T): each player's latest line rides along in their presence
 function openChat(){for(const k in keys)keys[k]=false;P.charging=false;$('chatBox').hidden=false;exitLock();setTimeout(()=>$('chatIn').focus(),0)}
 function closeChat(send){const t=$('chatIn').value.replace(/\s+/g,' ').trim().slice(0,120);$('chatIn').value='';$('chatBox').hidden=true;$('chatIn').blur();
