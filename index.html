@@ -212,6 +212,8 @@ window.MQTT_WAIT=new Promise(function(res){var u=["https://unpkg.com/mqtt@5.10.1
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>window.THREE||document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>')</script>
 <script>
+if(/[?&]bgraf=1/.test(location.search))window.requestAnimationFrame=cb=>setTimeout(()=>cb(performance.now()),16);
+
 (()=>{
 'use strict';
 const $=id=>document.getElementById(id);
